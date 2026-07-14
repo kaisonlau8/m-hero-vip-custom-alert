@@ -1,0 +1,312 @@
+{% extends "base.html" %}
+{% block title %}仪表盘 — VIP 保养提醒{% endblock %}
+{% block content %}
+<h2 style="font-size:20px; margin-bottom:16px;">浏览器会话与 VIP 任务</h2>
+
+<div class="grid">
+  <div class="stat">
+    <div class="num" id="browser-status" style="color:{% if browser_ok %}var(--turquoise){% else %}var(--red){% endif %};">
+      {% if browser_ok %}在线{% else %}离线{% endif %}
+    </div>
+    <div class="label">浏览器会话</div>
+  </div>
+  <div class="stat">
+    <div class="num" id="dms-status" style="color:{% if browser_ok %}var(--turquoise){% else %}var(--orange){% endif %};">
+      {% if browser_ok %}已打开{% else %}未打开{% endif %}
+    </div>
+    <div class="label">DMS 页面</div>
+  </div>
+  <div class="stat">
+    <div class="num" id="keepalive-status" style="color:{% if keepalive_info.running %}var(--turquoise){% else %}var(--red){% endif %};">
+      {% if keepalive_info.running %}已开启{% else %}未开启{% endif %}
+    </div>
+    <div class="label" id="keepalive-detail">DMS 保活</div>
+  </div>
+  <div class="stat">
+    <div class="num" id="recorder-status" style="color:{% if recorder_info.running %}var(--orange){% else %}var(--gray){% endif %};">
+      {% if recorder_info.running %}录制中{% else %}空闲{% endif %}
+    </div>
+    <div class="label">浏览器录制</div>
+  </div>
+  <div class="stat">
+    <div class="num" id="vip-count">—</div>
+    <div class="label">VIP 缓存人数</div>
+  </div>
+  <div class="stat">
+    <div class="num" id="sent-count">—</div>
+    <div class="label">已提醒任务数</div>
+  </div>
+</div>
+
+<div class="card" style="border-left: 4px solid var(--orange);">
+  <h2>VIP 任务</h2>
+  <p style="color:var(--gray); font-size:13px; margin-bottom:12px;">
+    每日 0 点同步多维表，每日 9 点爬取保养提醒并按 VIN 匹配后发飞书卡片（同一任务编码只提醒一次）。
+  </p>
+  <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+    <button class="btn btn-primary btn-sm" onclick="vipSync()">同步多维表</button>
+    <button class="btn btn-warning btn-sm" onclick="vipCrawl()">仅爬取 DMS</button>
+    <button class="btn btn-success btn-sm" onclick="vipPipeline(false)">爬取+匹配发送</button>
+    <button class="btn btn-outline btn-sm" onclick="vipPipeline(true)">用最新 Excel dry-run</button>
+    <button class="btn btn-outline btn-sm" id="btn-sched-start" onclick="schedStart()">启动定时等候</button>
+    <button class="btn btn-outline btn-sm" id="btn-sched-stop" onclick="schedStop()">停止定时</button>
+  </div>
+  <p id="vip-detail" style="font-size:13px; color:var(--gray);">加载中…</p>
+</div>
+
+<div class="card" style="border-left: 4px solid var(--blue);">
+  <h2>浏览器管理</h2>
+  <div id="browser-detail" style="margin-bottom:12px;">
+    {% if browser %}
+    <table style="width:auto;">
+      <tr><td style="width:100px;">浏览器</td><td>{{ Path(browser.browserExecutable).stem if browser.browserExecutable else '未知' }}</td></tr>
+      <tr><td>PID</td><td>{{ browser.pid }}</td></tr>
+      <tr><td>CDP端口</td><td>{{ browser.port }}</td></tr>
+      <tr><td>启动时间</td><td>{{ browser.startedAt or '未知' }}</td></tr>
+      <tr><td>状态</td><td><span class="badge {% if browser_ok %}badge-green{% else %}badge-red{% endif %}" id="browser-badge">{% if browser_ok %}在线{% else %}离线{% endif %}</span></td></tr>
+    </table>
+    {% else %}
+    <p style="color:var(--gray);">尚未连接浏览器，请选择浏览器并启动登录。</p>
+    {% endif %}
+  </div>
+
+  <div style="display:flex; gap:8px; align-items:center; margin-bottom:12px;">
+    <label style="font-size:14px;">选择浏览器:</label>
+    <select id="browser-select" style="padding:6px 12px; border:1px solid var(--border); border-radius:4px; font-size:14px;">
+      {% for b in available_browsers %}
+      {% if b.available %}
+      <option value="{{ b.name }}">{{ b.label }} ✓</option>
+      {% else %}
+      <option value="{{ b.name }}" disabled>{{ b.label }} ✗（未安装）</option>
+      {% endif %}
+      {% endfor %}
+    </select>
+    <button onclick="launchBrowser()" class="btn btn-primary btn-sm">启动登录</button>
+    {% if browser %}
+    <button onclick="disconnectBrowser()" class="btn btn-outline btn-sm">断开连接</button>
+    {% endif %}
+  </div>
+  <p id="browser-hint" style="font-size:13px; color:var(--gray);">
+    {% if browser_ok %}浏览器在线，可录制/爬取。{% else %}点击「启动登录」后手动完成 DMS 登录。{% endif %}
+  </p>
+</div>
+
+<div class="card" style="border-left: 4px solid var(--orange);">
+  <h2>浏览器录制器</h2>
+  <p style="color:var(--gray); font-size:13px; margin-bottom:12px;">
+    录制保养提醒页操作（导航→查询→导出），输出到 <code>recordings/</code>，用于完善爬虫选择器。
+  </p>
+  <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">
+    <input id="recorder-name" type="text" placeholder="会话名（如 maintenance-reminder）"
+           style="padding:6px 12px; border:1px solid var(--border); border-radius:4px; font-size:14px; min-width:220px;"
+           value="maintenance-reminder">
+    <button id="btn-recorder-start" onclick="startRecorder()" class="btn btn-success btn-sm"
+            {% if not browser_ok %}disabled{% endif %}>开始录制</button>
+    <button id="btn-recorder-stop" onclick="stopRecorder()" class="btn btn-danger btn-sm"
+            {% if not recorder_info.running %}disabled{% endif %}>停止录制</button>
+  </div>
+  <p id="recorder-detail" style="font-size:13px; color:var(--gray);">
+    {% if recorder_info.running %}正在录制：PID {{ recorder_info.pid }}{% else %}未在录制。{% endif %}
+  </p>
+  {% if recordings %}
+  <h2 style="margin-top:16px;">最近录制</h2>
+  <table>
+    <thead><tr><th>会话</th><th>时间</th><th>事件数</th><th>摘要</th></tr></thead>
+    <tbody id="recordings-tbody">
+    {% for r in recordings %}
+    <tr>
+      <td><code>{{ r.name }}</code></td>
+      <td>{{ r.modified }}</td>
+      <td>{{ r.event_count }}</td>
+      <td>{% if r.has_summary %}有{% else %}—{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+
+<div class="card" style="border-left: 4px solid var(--turquoise);">
+  <h2>会话复用</h2>
+  <p style="font-size:14px; margin-bottom:8px;">
+    会话目录：<code>{{ session_home }}</code>
+    {% if session_shared %}
+    <span class="badge badge-green">共享</span>
+    {% else %}
+    <span class="badge badge-red">本插件独立</span>
+    {% endif %}
+  </p>
+  <p style="color:var(--gray); font-size:13px; margin-bottom:0;">
+    与事故车提醒 / 投诉爬虫共用浏览器时，设置 <code>{{ session_home_env }}</code> 为同一路径；控制台端口固定 <strong>9002</strong>（9000/9001 已占用）。
+  </p>
+</div>
+
+<script>
+let keepaliveNextRefreshEpoch = {{ keepalive_info.next_refresh_at_epoch or 0 }};
+let keepaliveRunning = {{ 'true' if keepalive_info.running else 'false' }};
+
+function renderKeepaliveStatus() {
+  var statusEl = document.getElementById('keepalive-status');
+  var detailEl = document.getElementById('keepalive-detail');
+  if (!statusEl || !detailEl) return;
+  if (!keepaliveRunning) {
+    statusEl.textContent = '未开启';
+    statusEl.style.color = 'var(--red)';
+    detailEl.textContent = 'DMS 保活';
+    return;
+  }
+  var nowEpoch = Math.floor(Date.now() / 1000);
+  var secondsLeft = keepaliveNextRefreshEpoch ? Math.max(keepaliveNextRefreshEpoch - nowEpoch, 0) : 0;
+  statusEl.textContent = '已开启';
+  statusEl.style.color = 'var(--turquoise)';
+  detailEl.textContent = keepaliveNextRefreshEpoch ? ('下次刷新 ' + secondsLeft + ' 秒') : '初始化中';
+}
+
+function renderRecorder(d) {
+  var rec = d.recorder || {};
+  var statusEl = document.getElementById('recorder-status');
+  var detailEl = document.getElementById('recorder-detail');
+  var startBtn = document.getElementById('btn-recorder-start');
+  var stopBtn = document.getElementById('btn-recorder-stop');
+  if (statusEl) {
+    statusEl.textContent = rec.running ? '录制中' : '空闲';
+    statusEl.style.color = rec.running ? 'var(--orange)' : 'var(--gray)';
+  }
+  if (detailEl) {
+    detailEl.innerHTML = rec.running
+      ? ('正在录制：PID ' + rec.pid + (rec.session_dir ? ' · <code>' + rec.session_dir + '</code>' : ''))
+      : '未在录制。';
+  }
+  if (startBtn) startBtn.disabled = !d.browser_ok || !!rec.running;
+  if (stopBtn) stopBtn.disabled = !rec.running;
+}
+
+function refreshVipStatus() {
+  fetch('/api/vip/status').then(r => r.json()).then(d => {
+    var vipEl = document.getElementById('vip-count');
+    var sentEl = document.getElementById('sent-count');
+    var detail = document.getElementById('vip-detail');
+    if (vipEl) vipEl.textContent = d.vip_count;
+    if (sentEl) sentEl.textContent = d.sent_count;
+    if (detail) {
+      var parts = [];
+      parts.push(d.task_running ? '任务执行中…' : '空闲');
+      parts.push(d.scheduler_running ? '定时等候中' : '定时未启动');
+      if (d.latest_download) parts.push('最新文件 ' + d.latest_download);
+      if (d.sync_state && d.sync_state.synced_at) parts.push('上次同步 ' + d.sync_state.synced_at);
+      if (d.last_error) parts.push('错误: ' + d.last_error);
+      detail.textContent = parts.join(' · ');
+    }
+  }).catch(function () {});
+}
+
+function refreshDashboardStatus() {
+  fetch('/api/status').then(r => r.json()).then(d => {
+    keepaliveRunning = !!(d.keepalive_info && d.keepalive_info.running);
+    keepaliveNextRefreshEpoch = d.keepalive_info ? (d.keepalive_info.next_refresh_at_epoch || 0) : 0;
+    renderKeepaliveStatus();
+    renderRecorder(d);
+    var browserStatus = document.getElementById('browser-status');
+    var dmsStatus = document.getElementById('dms-status');
+    var badge = document.getElementById('browser-badge');
+    var hint = document.getElementById('browser-hint');
+    if (browserStatus) {
+      browserStatus.textContent = d.browser_ok ? '在线' : '离线';
+      browserStatus.style.color = d.browser_ok ? 'var(--turquoise)' : 'var(--red)';
+    }
+    if (dmsStatus) {
+      var dmsOpen = !!(d.browser_info && d.browser_info.dms_page);
+      dmsStatus.textContent = dmsOpen ? '已打开' : '未打开';
+      dmsStatus.style.color = dmsOpen ? 'var(--turquoise)' : 'var(--orange)';
+    }
+    if (badge) {
+      badge.textContent = d.browser_ok ? '在线' : '离线';
+      badge.className = 'badge ' + (d.browser_ok ? 'badge-green' : 'badge-red');
+    }
+    if (hint && d.browser_ok) {
+      hint.style.color = 'var(--turquoise)';
+      hint.textContent = '浏览器在线，可录制/爬取。';
+    }
+  }).catch(function () {});
+  refreshVipStatus();
+}
+
+function launchBrowser() {
+  var browser = document.getElementById('browser-select').value;
+  fetch('/api/browser/launch', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({browser: browser})
+  }).then(r => r.json()).then(d => {
+    if (d.launched) { alert(d.message); location.reload(); }
+    else alert('启动失败: ' + (d.error || '未知错误'));
+  });
+}
+
+function disconnectBrowser() {
+  if (!confirm('确认断开浏览器连接？')) return;
+  fetch('/api/browser/disconnect', {method: 'POST'}).then(() => location.reload());
+}
+
+function startRecorder() {
+  var name = (document.getElementById('recorder-name').value || '').trim();
+  fetch('/api/recorder/start', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({session_name: name})
+  }).then(r => r.json().then(d => ({ok: r.ok, d}))).then(function (res) {
+    if (res.ok && res.d.started) { alert(res.d.message); location.reload(); }
+    else alert('无法开始录制: ' + (res.d.error || '未知错误'));
+  });
+}
+
+function stopRecorder() {
+  if (!confirm('确认停止录制？')) return;
+  fetch('/api/recorder/stop', {method: 'POST'}).then(r => r.json()).then(d => {
+    alert(d.message || '已停止'); location.reload();
+  });
+}
+
+function vipSync() {
+  fetch('/api/vip/sync', {method: 'POST'}).then(r => r.json()).then(d => {
+    alert(d.message || d.error || JSON.stringify(d));
+    setTimeout(refreshVipStatus, 1500);
+  });
+}
+
+function vipCrawl() {
+  fetch('/api/vip/crawl', {method: 'POST'}).then(r => r.json()).then(d => {
+    alert(d.message || d.error || JSON.stringify(d));
+    setTimeout(refreshVipStatus, 2000);
+  });
+}
+
+function vipPipeline(dryRun) {
+  fetch('/api/vip/pipeline', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({skip_crawl: !!dryRun, dry_run: !!dryRun})
+  }).then(r => r.json()).then(d => {
+    alert(d.message || d.error || JSON.stringify(d));
+    setTimeout(refreshVipStatus, 2000);
+  });
+}
+
+function schedStart() {
+  fetch('/api/vip/scheduler/start', {method: 'POST'}).then(r => r.json()).then(d => {
+    alert(d.message || d.error); refreshVipStatus();
+  });
+}
+
+function schedStop() {
+  fetch('/api/vip/scheduler/stop', {method: 'POST'}).then(r => r.json()).then(d => {
+    alert(d.message || d.error); refreshVipStatus();
+  });
+}
+
+renderKeepaliveStatus();
+refreshDashboardStatus();
+setInterval(renderKeepaliveStatus, 1000);
+setInterval(refreshDashboardStatus, 5000);
+</script>
+{% endblock %}
