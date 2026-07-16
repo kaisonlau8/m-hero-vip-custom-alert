@@ -54,6 +54,9 @@ def import_maintenance_reminder_xlsx(xlsx_path: str | Path) -> list[dict]:
         store_name = ""
         if "门店名称" in index:
             store_name = _cell_str(row[index["门店名称"]])
+        region = ""
+        if "区域" in index:
+            region = _cell_str(row[index["区域"]])
         tasks.append(
             {
                 "vin": vin,
@@ -61,6 +64,7 @@ def import_maintenance_reminder_xlsx(xlsx_path: str | Path) -> list[dict]:
                 "task_type": _cell_str(row[index["任务类型"]]),
                 "created_at": created_at,
                 "store_name": store_name,
+                "region": region,
             }
         )
 

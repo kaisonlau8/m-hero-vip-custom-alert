@@ -144,6 +144,7 @@ def build_vip_alert_card(payload: dict) -> dict:
     """构建 VIP 保养提醒卡片。"""
     fields = [
         ("门店名称", payload.get("store_name", "")),
+        ("区域", payload.get("region", "")),
         ("VIN", payload.get("vin", "")),
         ("姓名", payload.get("name", "")),
         ("客户类别", payload.get("customer_category", "")),

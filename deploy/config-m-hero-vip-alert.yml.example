@@ -1,0 +1,11 @@
+# Cloudflare Tunnel 配置模板（部署到 Mac Studio: ~/.cloudflared/config-m-hero-vip-alert.yml）
+# tunnel / credentials-file 在远端创建隧道后填写
+
+tunnel: REPLACE_TUNNEL_ID
+credentials-file: /Users/i/.cloudflared/REPLACE_TUNNEL_ID.json
+protocol: http2
+
+ingress:
+  - hostname: m-hero-vip-alert.41box.com
+    service: http://127.0.0.1:9002
+  - service: http_status:404

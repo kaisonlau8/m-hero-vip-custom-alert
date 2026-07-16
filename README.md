@@ -48,8 +48,9 @@ CLI：
 ## 多维表格
 
 - VIP：`tblO0YW2AG2lPJBn`（M817 VIP清单）— VIN / 姓名 / 客户类别 / VIP级别 / VIP属性 / 车系  
-- 导出补充：门店名称（置卡片最前）+ 任务类型 / 创建日期 / 任务编码  
-- 提醒人：`tblBCgluJyPS8NWT`（VIP 超级提醒）— 提醒人姓名 / 提醒人飞书电话号  
+- 导出补充：门店名称、区域、任务类型、创建日期、任务编码  
+- 提醒人：`tblBCgluJyPS8NWT`（[VIP 超级提醒](https://m-hero.feishu.cn/wiki/WILYwiyINiHiz5kOEvMc3T0enRh?table=tblBCgluJyPS8NWT&view=vewDU6ILnO)）— 提醒人（飞书联系人）/ 区域 / 提醒级别  
+- 路由规则：DMS 任务「区域」∩ VIP「VIP级别」精确匹配提醒人的「区域」「提醒级别」  
 - Base token：`LaF7bGsZ5aGxIbskmP7cnp1Qnac`
 
 ## 数据文件
