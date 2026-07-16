@@ -18,7 +18,9 @@ sys.path.insert(0, str(SCRIPT_DIR))
 load_dotenv(PLUGIN_ROOT / ".env")
 
 from feishu_client import BASE_URL, _auth_headers  # noqa: E402
-from time_utils import beijing_strftime  # noqa: E402
+from time_utils import beijing_strftime, ensure_beijing_tz  # noqa: E402
+
+ensure_beijing_tz()
 
 VIP_CACHE_PATH = PLUGIN_ROOT / "data" / "vip_cache.json"
 RECIPIENTS_LIST_PATH = PLUGIN_ROOT / "data" / "recipients_list.json"

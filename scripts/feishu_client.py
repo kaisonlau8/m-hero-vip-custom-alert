@@ -12,6 +12,10 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
+from time_utils import beijing_strftime, ensure_beijing_tz  # noqa: E402
+
+ensure_beijing_tz()
+
 BASE_URL = "https://open.feishu.cn/open-apis"
 
 _token_cache: dict = {"token": None, "expires_at": 0}
@@ -66,14 +70,14 @@ def _save_recipients_cache() -> None:
         {
             "phone": k,
             "open_id": v,
-            "resolved_at": time.strftime("%Y-%m-%dT%H:%M:%S+08:00"),
+            "resolved_at": beijing_strftime("%Y-%m-%dT%H:%M:%S+08:00"),
         }
         for k, v in _phone_to_open_id.items()
     ]
     _recipients_cache_path.parent.mkdir(parents=True, exist_ok=True)
     with open(_recipients_cache_path, "w", encoding="utf-8") as f:
         json.dump(
-            {"last_updated": time.strftime("%Y-%m-%d"), "entries": entries},
+            {"last_updated": beijing_strftime("%Y-%m-%d"), "entries": entries},
             f,
             ensure_ascii=False,
             indent=2,

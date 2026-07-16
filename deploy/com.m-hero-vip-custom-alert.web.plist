@@ -15,6 +15,11 @@
 	</array>
 	<key>WorkingDirectory</key>
 	<string>/Users/i/myCode/m-hero-vip-custom-alert</string>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>TZ</key>
+		<string>Asia/Shanghai</string>
+	</dict>
 	<key>RunAtLoad</key>
 	<true/>
 	<key>KeepAlive</key>

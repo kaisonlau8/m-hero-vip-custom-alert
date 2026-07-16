@@ -11,7 +11,7 @@ import sys
 import threading
 import time
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request
@@ -36,6 +36,16 @@ if _env_file.exists():
                 os.environ[key] = value
 
 sys.path.insert(0, str(SCRIPT_DIR))
+
+from time_utils import (  # noqa: E402
+    beijing_iso,
+    beijing_now,
+    beijing_strftime,
+    ensure_beijing_tz,
+    from_timestamp_beijing,
+)
+
+ensure_beijing_tz()
 
 from dfmc_browser_utils import (  # noqa: E402
     DEFAULT_BROWSER_CANDIDATES,
@@ -79,7 +89,7 @@ RECORDER_LOG_FILE = RUNTIME_DIR / "recorder.log"
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    return beijing_iso()
 
 
 def _pid_exists(pid: int) -> bool:
@@ -421,7 +431,7 @@ def _list_recordings(limit: int = 20) -> list[dict]:
         items.append({
             "name": path.name,
             "path": str(path),
-            "modified": datetime.fromtimestamp(path.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
+            "modified": from_timestamp_beijing(path.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
             "event_count": event_count,
             "has_summary": summary.exists(),
         })
@@ -456,7 +466,7 @@ def _start_recorder(session_name: str = "") -> dict:
     RECORDER_STOP_FILE.unlink(missing_ok=True)
 
     log_file = RUNTIME_DIR / "recorder.log"
-    name = (session_name or "").strip() or datetime.now().strftime("console-%H%M%S")
+    name = (session_name or "").strip() or beijing_strftime("console-%H%M%S")
     cmd = [
         str(python_bin),
         str(recorder_script),
@@ -879,7 +889,6 @@ def api_vip_crawl():
 def _scheduler_loop() -> None:
     from bitable_sync import sync_all
     from pipeline import run_pipeline
-    from time_utils import beijing_now
 
     fired = {"00:00": False, "09:00": False}
     while not _task_state["scheduler_stop"]:

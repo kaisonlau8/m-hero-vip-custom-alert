@@ -72,7 +72,12 @@ CLI：
 2. 可选：与事故车共用 `DFMC_DMS_SESSION_HOME`（见 [docs/shared-browser-session.md](docs/shared-browser-session.md)）  
 3. launchd 托管控制台 + Cloudflare Tunnel + 挂死监控（飞书通知刘明轩）  
 
-## 爬虫说明
+# 时区锁定（UTC+8 北京）
+调度、日志、文件名时间戳一律使用 `Asia/Shanghai`：
+
+- `scripts/time_utils.py`：`ensure_beijing_tz()` + `beijing_*` 工具
+- `run.sh` / `.env`：`TZ=Asia/Shanghai`
+- launchd plist：`EnvironmentVariables.TZ=Asia/Shanghai`
 
 基线脚本：`scripts/crawl_maintenance_reminder.py`  
 路由：`#/aftermarketMange/customerManagement/maintenanceReminderTask`  

@@ -4,6 +4,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 PYTHON="$ROOT/.venv/bin/python"
 
+# 强制北京时间，避免跟随机器本地时区
+export TZ=Asia/Shanghai
+
 if [[ ! -x "$PYTHON" ]]; then
   echo "虚拟环境不存在，先运行: python3 $ROOT/scripts/bootstrap.py" >&2
   exit 1

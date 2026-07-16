@@ -34,7 +34,9 @@ from dfmc_browser_utils import (  # noqa: E402
     get_session_home,
     release_export_lock,
 )
-from time_utils import beijing_strftime, beijing_today  # noqa: E402
+from time_utils import beijing_strftime, beijing_today, ensure_beijing_tz  # noqa: E402
+
+ensure_beijing_tz()
 
 REMINDER_ROUTE = "/aftermarketMange/customerManagement/maintenanceReminderTask"
 DMS_HOST = "m-dms.dfmc.com.cn"
