@@ -66,10 +66,11 @@ CLI：
 
 ## 部署（Mac Studio）
 
-1. 与事故车插件设置相同的 `DFMC_DMS_SESSION_HOME`  
-2. 控制台端口 **9002**（见 [docs/ports.md](docs/ports.md)）  
-3. 共享浏览器说明见 [docs/shared-browser-session.md](docs/shared-browser-session.md）  
-4. 启动：`./run.sh --prod` 或 `./run.sh --console` 后点「启动定时等候」
+详见 [docs/deploy-mac-studio.md](docs/deploy-mac-studio.md)。
+
+1. 控制台端口 **9002**，公网 https://m-hero-vip-alert.41box.com  
+2. 可选：与事故车共用 `DFMC_DMS_SESSION_HOME`（见 [docs/shared-browser-session.md](docs/shared-browser-session.md)）  
+3. launchd 托管控制台 + Cloudflare Tunnel + 挂死监控（飞书通知刘明轩）  
 
 ## 爬虫说明
 
