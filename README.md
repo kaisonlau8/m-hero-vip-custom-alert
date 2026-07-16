@@ -79,6 +79,8 @@ CLI：
 - `run.sh` / `.env`：`TZ=Asia/Shanghai`
 - launchd plist：`EnvironmentVariables.TZ=Asia/Shanghai`
 
+## 爬虫说明
+
 基线脚本：`scripts/crawl_maintenance_reminder.py`  
 路由：`#/aftermarketMange/customerManagement/maintenanceReminderTask`  
 
