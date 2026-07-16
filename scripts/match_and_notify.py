@@ -1,4 +1,4 @@
-"""VIP VIN 匹配 + 按任务编码去重 + 飞书通知。"""
+"""VIP VIN 匹配 + 按区域/级别路由提醒人 + 任务编码去重。"""
 
 from __future__ import annotations
 
@@ -59,6 +59,35 @@ def match_vip_tasks(tasks: list[dict], vip_cache: dict[str, dict]) -> list[dict]
     return matched
 
 
+def select_recipients_for_alert(
+    recipients: list[dict],
+    *,
+    region: str,
+    vip_level: str,
+) -> list[dict]:
+    """区域 ∩ 提醒级别（精确匹配 VIP级别 字符串）。"""
+    region = (region or "").strip()
+    vip_level = (vip_level or "").strip()
+    selected: list[dict] = []
+    seen: set[str] = set()
+    for r in recipients:
+        open_id = (r.get("open_id") or "").strip()
+        if not open_id or open_id in seen:
+            continue
+        regions = r.get("regions") or []
+        levels = r.get("levels") or []
+        if region and region not in regions:
+            continue
+        if vip_level and vip_level not in levels:
+            continue
+        # 缺区域或级别时不广播，避免误发
+        if not region or not vip_level:
+            continue
+        seen.add(open_id)
+        selected.append(r)
+    return selected
+
+
 def notify_matches(
     matches: list[dict],
     recipients: list[dict],
@@ -69,12 +98,10 @@ def notify_matches(
     sent_store = load_sent_tasks()
     already = sent_store.setdefault("tasks", {})
 
-    if test_phone:
-        recipients = [{"name": "TEST", "phone": test_phone}]
-
     result = {
         "matched": len(matches),
         "skipped_sent": 0,
+        "skipped_no_recipient": 0,
         "to_send": 0,
         "sent": 0,
         "failed": 0,
@@ -90,29 +117,60 @@ def notify_matches(
             continue
         pending.append(item)
 
-    result["to_send"] = len(pending)
-    if not recipients:
+    if not recipients and not test_phone:
         raise RuntimeError("无提醒人，请先同步多维表格「VIP 超级提醒」")
 
-    open_ids: list[tuple[str, str, str]] = []
-    for r in recipients:
-        phone = r.get("phone") or ""
-        oid = resolve_phone_to_open_id(phone) if not dry_run else f"dry_run:{phone}"
-        if not oid:
-            print(f"[WARN] 无法解析提醒人 {r.get('name')} / {phone}")
-            continue
-        open_ids.append((r.get("name") or "", phone, oid))
+    test_targets: list[dict] = []
+    if test_phone:
+        oid = resolve_phone_to_open_id(test_phone) if not dry_run else f"dry_run:{test_phone}"
+        if not oid and not dry_run:
+            raise RuntimeError(f"测试手机号无法解析 open_id: {test_phone}")
+        test_targets = [{"name": "TEST", "open_id": oid or f"dry_run:{test_phone}"}]
 
-    if not open_ids and not dry_run:
-        raise RuntimeError("提醒人手机号均未解析到飞书 open_id")
-
+    # 先按路由筛一遍，统计 to_send
+    routed: list[tuple[dict, list[dict]]] = []
     for item in pending:
+        if test_targets:
+            targets = test_targets
+        else:
+            targets = select_recipients_for_alert(
+                recipients,
+                region=item.get("region") or "",
+                vip_level=item.get("vip_level") or "",
+            )
+        if not targets:
+            result["skipped_no_recipient"] += 1
+            result["details"].append(
+                {
+                    "task_code": item["task_code"],
+                    "vin": item["vin"],
+                    "name": item.get("name"),
+                    "region": item.get("region"),
+                    "vip_level": item.get("vip_level"),
+                    "status": "skipped_no_recipient",
+                    "recipients": [],
+                }
+            )
+            print(
+                f"[skip] {item['task_code']} 无匹配提醒人 "
+                f"区域={item.get('region')} 级别={item.get('vip_level')}"
+            )
+            continue
+        routed.append((item, targets))
+
+    result["to_send"] = len(routed)
+
+    for item, targets in routed:
         card = build_vip_alert_card(item)
+        recipient_names = [t.get("name") or t.get("open_id") for t in targets]
         detail = {
             "task_code": item["task_code"],
             "vin": item["vin"],
             "name": item.get("name"),
+            "region": item.get("region"),
+            "vip_level": item.get("vip_level"),
             "status": "pending",
+            "recipients": recipient_names,
         }
 
         if dry_run:
@@ -120,18 +178,21 @@ def notify_matches(
             result["details"].append(detail)
             print(
                 f"[dry-run] {item['task_code']} VIN={item['vin']} "
-                f"{item.get('name')} {item.get('vip_level')}"
+                f"{item.get('name')} {item.get('region')}/{item.get('vip_level')} "
+                f"→ {', '.join(recipient_names)}"
             )
             continue
 
         ok_any = False
-        for rname, phone, oid in open_ids:
+        for t in targets:
+            oid = t.get("open_id") or ""
+            rname = t.get("name") or oid
             resp = send_card_message(oid, card)
             if resp:
                 ok_any = True
-                print(f"[sent] {item['task_code']} → {rname or phone}")
+                print(f"[sent] {item['task_code']} → {rname}")
             else:
-                print(f"[fail] {item['task_code']} → {rname or phone}")
+                print(f"[fail] {item['task_code']} → {rname}")
             time.sleep(0.35)
 
         if ok_any:
@@ -139,6 +200,9 @@ def notify_matches(
                 "vin": item["vin"],
                 "sent_at": beijing_strftime("%Y-%m-%d %H:%M:%S"),
                 "name": item.get("name", ""),
+                "region": item.get("region", ""),
+                "vip_level": item.get("vip_level", ""),
+                "recipients": recipient_names,
             }
             result["sent"] += 1
             detail["status"] = "sent"
@@ -174,6 +238,7 @@ def run_match_and_notify(
         "xlsx": str(xlsx_path),
         "task_count": len(tasks),
         "vip_cache_count": len(vip_cache),
+        "recipient_count": len(recipients),
         **notify_result,
     }
 

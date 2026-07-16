@@ -24,8 +24,6 @@ VIP_CACHE_PATH = PLUGIN_ROOT / "data" / "vip_cache.json"
 RECIPIENTS_LIST_PATH = PLUGIN_ROOT / "data" / "recipients_list.json"
 SYNC_STATE_PATH = PLUGIN_ROOT / ".runtime" / "bitable-sync-state.json"
 
-VIP_FIELDS = ("VIN", "姓名", "客户类别", "VIP级别", "VIP属性", "车系")
-
 
 def _field_text(value: Any) -> str:
     if value is None:
@@ -49,9 +47,7 @@ def _field_text(value: Any) -> str:
                     parts.append(str(text))
             elif item is not None:
                 parts.append(str(item))
-        # MultiSelect 用顿号拼接
-        joined = "、".join(p.strip() for p in parts if str(p).strip())
-        return joined
+        return "、".join(p.strip() for p in parts if str(p).strip())
     if isinstance(value, dict):
         if "text" in value:
             return str(value.get("text") or "").strip()
@@ -60,14 +56,41 @@ def _field_text(value: Any) -> str:
     return str(value).strip()
 
 
-def _normalize_phone(value: Any) -> str:
-    phone = _field_text(value)
-    phone = phone.replace("+86-", "").replace("+86", "").replace(" ", "").replace("-", "")
-    if phone.endswith(".0") and phone[:-2].isdigit():
-        phone = phone[:-2]
-    if phone.startswith("86") and len(phone) == 13:
-        phone = phone[2:]
-    return phone
+def _field_list(value: Any) -> list[str]:
+    """MultiSelect / 多值字段 → 去重后的字符串列表。"""
+    if value is None or value is False:
+        return []
+    if isinstance(value, str):
+        return [value.strip()] if value.strip() else []
+    if isinstance(value, list):
+        out: list[str] = []
+        for item in value:
+            if isinstance(item, dict):
+                text = item.get("text")
+                if text is None:
+                    text = item.get("name")
+                text = str(text or "").strip()
+            else:
+                text = str(item).strip() if item is not None else ""
+            if text and text not in out:
+                out.append(text)
+        return out
+    if isinstance(value, dict):
+        text = _field_text(value)
+        return [text] if text else []
+    text = str(value).strip()
+    return [text] if text else []
+
+
+def _parse_user(value: Any) -> tuple[str, str]:
+    """User 字段 → (name, open_id)。"""
+    if isinstance(value, list) and value:
+        value = value[0]
+    if not isinstance(value, dict):
+        return "", ""
+    name = str(value.get("name") or value.get("en_name") or "").strip()
+    open_id = str(value.get("id") or value.get("open_id") or "").strip()
+    return name, open_id
 
 
 def _bitable_ids() -> dict[str, str]:
@@ -140,15 +163,29 @@ def records_to_vip_cache(records: list[dict]) -> dict[str, dict]:
 
 
 def records_to_recipients(records: list[dict]) -> list[dict]:
+    """提醒人表：联系人 User + 区域 + 提醒级别。"""
     recipients: list[dict] = []
     seen: set[str] = set()
     for fields in records:
-        name = _field_text(fields.get("提醒人姓名"))
-        phone = _normalize_phone(fields.get("提醒人飞书电话号"))
-        if not phone or phone in seen:
+        name, open_id = _parse_user(fields.get("提醒人"))
+        if not open_id:
+            # 兼容旧字段（手机号）
+            legacy_name = _field_text(fields.get("提醒人姓名"))
+            if legacy_name:
+                name = legacy_name
             continue
-        seen.add(phone)
-        recipients.append({"name": name, "phone": phone})
+        if open_id in seen:
+            continue
+        seen.add(open_id)
+        recipients.append(
+            {
+                "id": _field_text(fields.get("提醒ID")),
+                "name": name,
+                "open_id": open_id,
+                "regions": _field_list(fields.get("区域")),
+                "levels": _field_list(fields.get("提醒级别")),
+            }
+        )
     return recipients
 
 
