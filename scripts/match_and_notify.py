@@ -19,7 +19,9 @@ from feishu_client import (  # noqa: E402
     send_card_message,
 )
 from import_excel import import_maintenance_reminder_xlsx  # noqa: E402
-from time_utils import beijing_strftime  # noqa: E402
+from time_utils import beijing_strftime, ensure_beijing_tz  # noqa: E402
+
+ensure_beijing_tz()
 
 SENT_TASKS_PATH = PLUGIN_ROOT / "data" / "sent_tasks.json"
 

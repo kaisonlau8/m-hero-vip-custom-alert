@@ -13,7 +13,9 @@ sys.path.insert(0, str(SCRIPT_DIR))
 
 from bitable_sync import sync_all  # noqa: E402
 from pipeline import run_pipeline  # noqa: E402
-from time_utils import beijing_now, beijing_strftime  # noqa: E402
+from time_utils import beijing_now, beijing_strftime, ensure_beijing_tz  # noqa: E402
+
+ensure_beijing_tz()
 
 
 def run_midnight_bitable_sync() -> dict:

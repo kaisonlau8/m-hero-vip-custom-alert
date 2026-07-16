@@ -21,7 +21,9 @@ from dotenv import load_dotenv
 load_dotenv(PLUGIN_ROOT / ".env")
 
 from feishu_client import resolve_phone_to_open_id, send_text_message  # noqa: E402
-from time_utils import beijing_strftime  # noqa: E402
+from time_utils import beijing_strftime, ensure_beijing_tz  # noqa: E402
+
+ensure_beijing_tz()
 
 STATE_PATH = PLUGIN_ROOT / ".runtime" / "health-watchdog-state.json"
 DEFAULT_URL = f"http://{os.getenv('CONSOLE_HOST') or '127.0.0.1'}:{os.getenv('CONSOLE_PORT') or '9002'}/api/vip/status"

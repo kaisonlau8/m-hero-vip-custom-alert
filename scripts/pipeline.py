@@ -15,7 +15,9 @@ from bitable_sync import sync_all  # noqa: E402
 from crawl_maintenance_reminder import crawl  # noqa: E402
 from import_excel import find_latest_download  # noqa: E402
 from match_and_notify import run_match_and_notify  # noqa: E402
-from time_utils import beijing_strftime  # noqa: E402
+from time_utils import beijing_strftime, ensure_beijing_tz  # noqa: E402
+
+ensure_beijing_tz()
 
 MANIFEST_PATH = PLUGIN_ROOT / "data" / "run_manifest.json"
 
