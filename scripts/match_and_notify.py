@@ -1,4 +1,4 @@
-"""VIP VIN 匹配 + 按区域/级别路由提醒人 + 任务编码去重。"""
+"""VIP VIN 匹配 + 按区域/级别路由提醒人 + 角色分卡 + 任务编码去重。"""
 
 from __future__ import annotations
 
@@ -20,6 +20,12 @@ from feishu_client import (  # noqa: E402
 )
 from import_excel import import_maintenance_reminder_xlsx  # noqa: E402
 from time_utils import beijing_strftime, ensure_beijing_tz  # noqa: E402
+from tracking_bitable import (  # noqa: E402
+    STATUS_DONE,
+    is_supervisor_role,
+    set_alert_triggered,
+    upsert_tracking_from_task,
+)
 
 ensure_beijing_tz()
 
@@ -90,6 +96,13 @@ def select_recipients_for_alert(
     return selected
 
 
+def _normalize_role(recipient: dict) -> str:
+    role = (recipient.get("role") or "").strip()
+    if role == "supervisor":
+        return "supervisor"
+    return "admin"
+
+
 def notify_matches(
     matches: list[dict],
     recipients: list[dict],
@@ -104,20 +117,13 @@ def notify_matches(
         "matched": len(matches),
         "skipped_sent": 0,
         "skipped_no_recipient": 0,
+        "tracking_upserted": 0,
         "to_send": 0,
         "sent": 0,
         "failed": 0,
         "dry_run": dry_run,
         "details": [],
     }
-
-    pending = []
-    for item in matches:
-        code = item["task_code"]
-        if code in already:
-            result["skipped_sent"] += 1
-            continue
-        pending.append(item)
 
     if not recipients and not test_phone:
         raise RuntimeError("无提醒人，请先同步多维表格「VIP 超级提醒」")
@@ -127,11 +133,19 @@ def notify_matches(
         oid = resolve_phone_to_open_id(test_phone) if not dry_run else f"dry_run:{test_phone}"
         if not oid and not dry_run:
             raise RuntimeError(f"测试手机号无法解析 open_id: {test_phone}")
-        test_targets = [{"name": "TEST", "open_id": oid or f"dry_run:{test_phone}"}]
+        # 测试默认按督导，便于验证按钮与闭环
+        test_targets = [
+            {
+                "name": "TEST",
+                "open_id": oid or f"dry_run:{test_phone}",
+                "role": "supervisor",
+            }
+        ]
 
-    # 先按路由筛一遍，统计 to_send
-    routed: list[tuple[dict, list[dict]]] = []
-    for item in pending:
+    for item in matches:
+        code = item["task_code"]
+        already_sent = code in already
+
         if test_targets:
             targets = test_targets
         else:
@@ -140,11 +154,12 @@ def notify_matches(
                 region=item.get("region") or "",
                 vip_level=item.get("vip_level") or "",
             )
+
         if not targets:
             result["skipped_no_recipient"] += 1
             result["details"].append(
                 {
-                    "task_code": item["task_code"],
+                    "task_code": code,
                     "vin": item["vin"],
                     "name": item.get("name"),
                     "region": item.get("region"),
@@ -154,51 +169,140 @@ def notify_matches(
                 }
             )
             print(
-                f"[skip] {item['task_code']} 无匹配提醒人 "
+                f"[skip] {code} 无匹配提醒人 "
                 f"区域={item.get('region')} 级别={item.get('vip_level')}"
             )
             continue
-        routed.append((item, targets))
 
-    result["to_send"] = len(routed)
+        if already_sent:
+            result["skipped_sent"] += 1
 
-    for item, targets in routed:
-        card = build_vip_alert_card(item)
-        recipient_names = [t.get("name") or t.get("open_id") for t in targets]
         detail = {
-            "task_code": item["task_code"],
+            "task_code": code,
             "vin": item["vin"],
             "name": item.get("name"),
             "region": item.get("region"),
             "vip_level": item.get("vip_level"),
             "status": "pending",
-            "recipients": recipient_names,
+            "recipients": [],
+            "tracking": [],
         }
 
-        if dry_run:
-            detail["status"] = "dry_run"
-            result["details"].append(detail)
-            print(
-                f"[dry-run] {item['task_code']} VIN={item['vin']} "
-                f"{item.get('name')} {item.get('region')}/{item.get('vip_level')} "
-                f"→ {', '.join(recipient_names)}"
-            )
-            continue
-
         ok_any = False
+        need_send = not already_sent
+        send_attempts = 0
+
         for t in targets:
+            role = _normalize_role(t)
+            rname = t.get("name") or t.get("open_id") or ""
             oid = t.get("open_id") or ""
-            rname = t.get("name") or oid
+            tracking_record_id = ""
+            tracking_status = ""
+
+            if is_supervisor_role(role):
+                try:
+                    tr = upsert_tracking_from_task(item, t, dry_run=dry_run)
+                    tracking_record_id = tr.get("record_id") or ""
+                    tracking_status = tr.get("status") or ""
+                    result["tracking_upserted"] += 1
+                    detail["tracking"].append(
+                        {
+                            "supervisor": rname,
+                            "record_id": tracking_record_id,
+                            "created": tr.get("created"),
+                            "status": tracking_status,
+                        }
+                    )
+                    print(
+                        f"[tracking] {code} → {rname} "
+                        f"{'新建' if tr.get('created') else '补全'} "
+                        f"status={tracking_status or '-'} id={tracking_record_id or '-'}"
+                    )
+                except Exception as e:
+                    print(f"[tracking-fail] {code} → {rname}: {e}")
+                    detail["tracking"].append(
+                        {"supervisor": rname, "error": str(e)}
+                    )
+
+            # 已发过 IM，或督导已闭环：只补全跟踪，不再发卡
+            if not need_send:
+                detail["recipients"].append(
+                    {"name": rname, "role": role, "action": "skip_already_sent"}
+                )
+                continue
+            if is_supervisor_role(role) and tracking_status == STATUS_DONE:
+                detail["recipients"].append(
+                    {"name": rname, "role": role, "action": "skip_already_closed"}
+                )
+                continue
+
+            card = build_vip_alert_card(
+                item,
+                role=role,
+                tracking_record_id=(
+                    tracking_record_id
+                    if tracking_record_id
+                    else ("dry_run" if dry_run and is_supervisor_role(role) else "")
+                )
+                if is_supervisor_role(role)
+                else "",
+            )
+            send_attempts += 1
+
+            if dry_run:
+                detail["recipients"].append(
+                    {
+                        "name": rname,
+                        "role": role,
+                        "action": "dry_run",
+                        "has_button": is_supervisor_role(role) and bool(tracking_record_id or dry_run),
+                    }
+                )
+                print(
+                    f"[dry-run] {code} VIN={item['vin']} {item.get('name')} "
+                    f"{item.get('region')}/{item.get('vip_level')} "
+                    f"→ {rname}({role})"
+                )
+                continue
+
             resp = send_card_message(oid, card)
             if resp:
                 ok_any = True
-                print(f"[sent] {item['task_code']} → {rname}")
+                message_id = resp.get("message_id") or ""
+                print(f"[sent] {code} → {rname}({role})")
+                detail["recipients"].append(
+                    {
+                        "name": rname,
+                        "role": role,
+                        "action": "sent",
+                        "message_id": message_id,
+                    }
+                )
+                if is_supervisor_role(role) and tracking_record_id:
+                    try:
+                        set_alert_triggered(tracking_record_id, message_id=message_id)
+                    except Exception as e:
+                        print(f"[tracking-trigger-fail] {code}: {e}")
             else:
-                print(f"[fail] {item['task_code']} → {rname}")
+                print(f"[fail] {code} → {rname}({role})")
+                detail["recipients"].append(
+                    {"name": rname, "role": role, "action": "failed"}
+                )
             time.sleep(0.35)
 
-        if ok_any:
-            already[item["task_code"]] = {
+        if already_sent:
+            detail["status"] = "skipped_sent_tracking_refreshed"
+        elif dry_run:
+            detail["status"] = "dry_run"
+            if send_attempts:
+                result["to_send"] += 1
+        elif ok_any:
+            recipient_names = [
+                x.get("name")
+                for x in detail["recipients"]
+                if x.get("action") == "sent"
+            ]
+            already[code] = {
                 "vin": item["vin"],
                 "sent_at": beijing_strftime("%Y-%m-%d %H:%M:%S"),
                 "name": item.get("name", ""),
@@ -207,13 +311,29 @@ def notify_matches(
                 "recipients": recipient_names,
             }
             result["sent"] += 1
+            result["to_send"] += 1
             detail["status"] = "sent"
+        elif send_attempts == 0:
+            # 无需发送（例如督导均已闭环）
+            detail["status"] = "no_send_needed"
+            if not dry_run and code not in already:
+                already[code] = {
+                    "vin": item["vin"],
+                    "sent_at": beijing_strftime("%Y-%m-%d %H:%M:%S"),
+                    "name": item.get("name", ""),
+                    "region": item.get("region", ""),
+                    "vip_level": item.get("vip_level", ""),
+                    "recipients": [],
+                    "note": "tracking_closed_or_empty",
+                }
         else:
             result["failed"] += 1
+            result["to_send"] += 1
             detail["status"] = "failed"
+
         result["details"].append(detail)
 
-    if not dry_run and result["sent"]:
+    if not dry_run and (result["sent"] or result["tracking_upserted"]):
         sent_store["updated_at"] = beijing_strftime("%Y-%m-%d %H:%M:%S")
         save_sent_tasks(sent_store)
 

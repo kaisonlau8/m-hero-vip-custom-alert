@@ -164,31 +164,66 @@ def records_to_vip_cache(records: list[dict]) -> dict[str, dict]:
     return cache
 
 
+def _parse_role(value: Any) -> str:
+    """提醒人角色 → admin / supervisor / 空（未填按管理员处理）。"""
+    text = _field_text(value)
+    if not text:
+        return ""
+    if text == "督导":
+        return "supervisor"
+    if text == "管理员":
+        return "admin"
+    # 脏选项或未知值：不按督导处理
+    return "admin"
+
+
 def records_to_recipients(records: list[dict]) -> list[dict]:
-    """提醒人表：联系人 User + 区域 + 提醒级别。"""
-    recipients: list[dict] = []
-    seen: set[str] = set()
+    """提醒人表：联系人 User + 区域 + 提醒级别 + 提醒人角色。
+
+    同一 open_id 多行时合并区域/级别（例如同一人负责多区）。
+    """
+    by_oid: dict[str, dict] = {}
     for fields in records:
         name, open_id = _parse_user(fields.get("提醒人"))
         if not open_id:
-            # 兼容旧字段（手机号）
             legacy_name = _field_text(fields.get("提醒人姓名"))
             if legacy_name:
                 name = legacy_name
             continue
-        if open_id in seen:
-            continue
-        seen.add(open_id)
-        recipients.append(
-            {
-                "id": _field_text(fields.get("提醒ID")),
+        role_raw = _field_text(fields.get("提醒人角色"))
+        role = _parse_role(fields.get("提醒人角色"))
+        if not role_raw:
+            print(f"[bitable-sync] WARN 提醒人 {name or open_id} 未填「提醒人角色」，按管理员（仅通知）处理")
+        regions = _field_list(fields.get("区域"))
+        levels = _field_list(fields.get("提醒级别"))
+        rid = _field_text(fields.get("提醒ID"))
+        if open_id not in by_oid:
+            by_oid[open_id] = {
+                "id": rid,
                 "name": name,
                 "open_id": open_id,
-                "regions": _field_list(fields.get("区域")),
-                "levels": _field_list(fields.get("提醒级别")),
+                "regions": list(regions),
+                "levels": list(levels),
+                "role": role,
+                "role_label": role_raw or "",
             }
-        )
-    return recipients
+            continue
+        cur = by_oid[open_id]
+        for x in regions:
+            if x not in cur["regions"]:
+                cur["regions"].append(x)
+        for x in levels:
+            if x not in cur["levels"]:
+                cur["levels"].append(x)
+        # 任一行为督导则按督导（闭环优先）
+        if role == "supervisor":
+            cur["role"] = "supervisor"
+            cur["role_label"] = role_raw or cur["role_label"]
+        if name and not cur.get("name"):
+            cur["name"] = name
+        if rid and not cur.get("id"):
+            cur["id"] = rid
+    return list(by_oid.values())
 
 
 def _save_json(path: Path, data: Any) -> None:

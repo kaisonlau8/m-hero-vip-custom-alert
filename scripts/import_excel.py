@@ -10,6 +10,26 @@ import openpyxl
 SHEET_NAME = "客户回访任务中心"
 REQUIRED_COLUMNS = ("VIN", "任务编码", "任务类型", "创建日期")
 
+# Excel 列名 → 任务 dict 键
+OPTIONAL_COLUMNS: dict[str, str] = {
+    "区域": "region",
+    "门店编码": "store_code",
+    "门店名称": "store_name",
+    "任务状态": "task_status",
+    "售后车系": "aftersales_series",
+    "用车人名称": "driver_name",
+    "用车人电话": "driver_phone",
+    "车主名称": "owner_name",
+    "车主电话": "owner_phone",
+    "下次预约时间": "next_appointment_at",
+    "预约单号": "appointment_no",
+    "到期日期": "due_at",
+    "首次回访日期": "first_followup_at",
+    "首次回访人": "first_followup_by",
+    "状态": "dms_valid_status",
+    "关闭时间": "closed_at",
+}
+
 
 def _cell_str(value: Any) -> str:
     if value is None:
@@ -17,6 +37,21 @@ def _cell_str(value: Any) -> str:
     if isinstance(value, float) and value.is_integer():
         return str(int(value))
     return str(value).strip()
+
+
+def _cell_datetime_str(value: Any) -> str:
+    if value is None:
+        return ""
+    if hasattr(value, "strftime"):
+        # 日期无时分秒时仍输出完整可读串
+        try:
+            if getattr(value, "hour", None) == 0 and getattr(value, "minute", None) == 0 and getattr(value, "second", None) == 0:
+                # 仍保留时间，与导出一致
+                return value.strftime("%Y-%m-%d %H:%M:%S")
+        except Exception:
+            pass
+        return value.strftime("%Y-%m-%d %H:%M:%S")
+    return _cell_str(value)
 
 
 def import_maintenance_reminder_xlsx(xlsx_path: str | Path) -> list[dict]:
@@ -47,26 +82,28 @@ def import_maintenance_reminder_xlsx(xlsx_path: str | Path) -> list[dict]:
         task_code = _cell_str(row[index["任务编码"]])
         if not vin or not task_code:
             continue
-        created = row[index["创建日期"]]
-        created_at = _cell_str(created)
-        if hasattr(created, "strftime"):
-            created_at = created.strftime("%Y-%m-%d %H:%M:%S")
-        store_name = ""
-        if "门店名称" in index:
-            store_name = _cell_str(row[index["门店名称"]])
-        region = ""
-        if "区域" in index:
-            region = _cell_str(row[index["区域"]])
-        tasks.append(
-            {
-                "vin": vin,
-                "task_code": task_code,
-                "task_type": _cell_str(row[index["任务类型"]]),
-                "created_at": created_at,
-                "store_name": store_name,
-                "region": region,
-            }
-        )
+
+        task: dict[str, Any] = {
+            "vin": vin,
+            "task_code": task_code,
+            "task_type": _cell_str(row[index["任务类型"]]),
+            "created_at": _cell_datetime_str(row[index["创建日期"]]),
+        }
+        for col_name, key in OPTIONAL_COLUMNS.items():
+            if col_name not in index:
+                task[key] = ""
+                continue
+            raw = row[index[col_name]]
+            if col_name in (
+                "下次预约时间",
+                "到期日期",
+                "首次回访日期",
+                "关闭时间",
+            ):
+                task[key] = _cell_datetime_str(raw)
+            else:
+                task[key] = _cell_str(raw)
+        tasks.append(task)
 
     wb.close()
     return tasks

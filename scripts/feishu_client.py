@@ -125,6 +125,28 @@ def send_text_message(open_id: str, text: str) -> dict | None:
     return _send_message(open_id, msg_type="text", content=json.dumps({"text": text}))
 
 
+def patch_card_message(message_id: str, card: dict) -> dict | None:
+    """更新已发送的交互卡片内容。"""
+    if not message_id:
+        return None
+    try:
+        resp = requests.patch(
+            f"{BASE_URL}/im/v1/messages/{message_id}",
+            headers={**_auth_headers(), "Content-Type": "application/json"},
+            json={"content": json.dumps(card)},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("code") != 0:
+            print(f"[ERROR] 更新卡片失败: {data.get('msg')}")
+            return None
+        return data.get("data")
+    except requests.RequestException as e:
+        print(f"[ERROR] 更新卡片异常: {e}")
+        return None
+
+
 def _send_message(open_id: str, msg_type: str, content: str) -> dict | None:
     try:
         resp = requests.post(
@@ -144,10 +166,10 @@ def _send_message(open_id: str, msg_type: str, content: str) -> dict | None:
         return None
 
 
-def build_vip_alert_card(payload: dict) -> dict:
-    """构建 VIP 保养提醒卡片。"""
+def _card_body_lines(payload: dict) -> str:
     fields = [
         ("门店名称", payload.get("store_name", "")),
+        ("门店编码", payload.get("store_code", "")),
         ("区域", payload.get("region", "")),
         ("VIN", payload.get("vin", "")),
         ("姓名", payload.get("name", "")),
@@ -155,19 +177,115 @@ def build_vip_alert_card(payload: dict) -> dict:
         ("VIP 级别", payload.get("vip_level", "")),
         ("VIP 属性", payload.get("vip_attrs", "")),
         ("车系", payload.get("series", "")),
+        ("售后车系", payload.get("aftersales_series", "")),
         ("任务类型", payload.get("task_type", "")),
+        ("任务状态", payload.get("task_status", "")),
+        ("用车人", payload.get("driver_name", "")),
+        ("车主", payload.get("owner_name", "")),
+        ("下次预约时间", payload.get("next_appointment_at", "")),
+        ("到期日期", payload.get("due_at", "")),
         ("创建日期", payload.get("created_at", "")),
         ("任务编码", payload.get("task_code", "")),
     ]
-    lines = "\n".join(f"**{k}**：{v}" for k, v in fields if v not in (None, ""))
-    return {
-        "config": {"wide_screen_mode": True},
-        "header": {
-            "title": {"tag": "plain_text", "content": "VIP 客户保养提醒"},
-            "template": "orange",
-        },
-        "elements": [
-            {"tag": "div", "text": {"tag": "lark_md", "content": lines}},
+    return "\n".join(f"**{k}**：{v}" for k, v in fields if v not in (None, ""))
+
+
+def build_vip_alert_card(
+    payload: dict,
+    *,
+    role: str = "",
+    tracking_record_id: str = "",
+    confirmed: bool = False,
+    confirmed_at: str = "",
+) -> dict:
+    """构建 VIP 保养提醒卡片。督导角色带「已提醒门店」按钮。"""
+    lines = _card_body_lines(payload)
+    elements: list[dict] = [
+        {"tag": "div", "text": {"tag": "lark_md", "content": lines}},
+    ]
+
+    is_supervisor = (role or "").strip() == "supervisor"
+    if is_supervisor and confirmed:
+        stamp = confirmed_at or beijing_strftime("%Y-%m-%d %H:%M:%S")
+        elements.append(
+            {
+                "tag": "div",
+                "text": {
+                    "tag": "lark_md",
+                    "content": f"**跟踪状态**：已提醒门店（确认于 {stamp}）",
+                },
+            }
+        )
+        elements.append(
+            {
+                "tag": "note",
+                "elements": [
+                    {
+                        "tag": "plain_text",
+                        "content": "闭环已确认 · HeroClaw",
+                    }
+                ],
+            }
+        )
+    elif is_supervisor and tracking_record_id:
+        elements.append(
+            {
+                "tag": "div",
+                "text": {
+                    "tag": "lark_md",
+                    "content": "请电话提醒门店跟进后，点击下方按钮完成闭环。",
+                },
+            }
+        )
+        elements.append(
+            {
+                "tag": "action",
+                "actions": [
+                    {
+                        "tag": "button",
+                        "text": {"tag": "plain_text", "content": "已提醒门店"},
+                        "type": "primary",
+                        "value": {
+                            "action": "store_reminded",
+                            "record_id": str(tracking_record_id),
+                            "task_code": str(payload.get("task_code") or ""),
+                            "vin": str(payload.get("vin") or ""),
+                            "name": str(payload.get("name") or ""),
+                            "store_name": str(payload.get("store_name") or ""),
+                            "region": str(payload.get("region") or ""),
+                        },
+                        # 新版卡片交互也认 behaviors.callback
+                        "behaviors": [
+                            {
+                                "type": "callback",
+                                "value": {
+                                    "action": "store_reminded",
+                                    "record_id": str(tracking_record_id),
+                                    "task_code": str(payload.get("task_code") or ""),
+                                    "vin": str(payload.get("vin") or ""),
+                                    "name": str(payload.get("name") or ""),
+                                    "store_name": str(payload.get("store_name") or ""),
+                                    "region": str(payload.get("region") or ""),
+                                },
+                            }
+                        ],
+                    }
+                ],
+            }
+        )
+        elements.append(
+            {
+                "tag": "note",
+                "elements": [
+                    {
+                        "tag": "plain_text",
+                        "content": "同一任务编码仅提醒一次 · 督导闭环 · HeroClaw",
+                    }
+                ],
+            }
+        )
+    else:
+        elements.append(
             {
                 "tag": "note",
                 "elements": [
@@ -176,6 +294,14 @@ def build_vip_alert_card(payload: dict) -> dict:
                         "content": "同一任务编码仅提醒一次 · HeroClaw",
                     }
                 ],
-            },
-        ],
+            }
+        )
+
+    return {
+        "config": {"wide_screen_mode": True},
+        "header": {
+            "title": {"tag": "plain_text", "content": "VIP 客户保养提醒"},
+            "template": "green" if confirmed else "orange",
+        },
+        "elements": elements,
     }

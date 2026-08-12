@@ -765,6 +765,262 @@ def api_browser_disconnect():
     return jsonify({"disconnected": True})
 
 
+# ── 飞书卡片回传（督导闭环）────────────────────────────────
+
+def _feishu_verification_token() -> str:
+    return (os.getenv("FEISHU_VERIFICATION_TOKEN") or "").strip()
+
+
+def _feishu_encrypt_key() -> str:
+    return (os.getenv("FEISHU_ENCRYPT_KEY") or "").strip()
+
+
+def _decrypt_feishu_encrypt(encrypt_b64: str, encrypt_key: str) -> dict:
+    """飞书事件加密包解密（AES-256-CBC + SHA256(key)）。"""
+    import base64
+    import hashlib
+
+    from Crypto.Cipher import AES
+
+    key = hashlib.sha256(encrypt_key.encode("utf-8")).digest()
+    raw = base64.b64decode(encrypt_b64)
+    iv, ciphertext = raw[:16], raw[16:]
+    plain = AES.new(key, AES.MODE_CBC, iv).decrypt(ciphertext)
+    pad = plain[-1]
+    if isinstance(pad, int) and 1 <= pad <= 16:
+        plain = plain[:-pad]
+    return json.loads(plain.decode("utf-8"))
+
+
+def _maybe_decrypt_feishu_body(raw: bytes) -> dict:
+    """解析回调 JSON；若含 encrypt 则用 FEISHU_ENCRYPT_KEY 解密。"""
+    data = json.loads(raw.decode("utf-8") or "{}")
+    encrypt = data.get("encrypt")
+    if not encrypt:
+        return data
+    key = _feishu_encrypt_key()
+    if not key:
+        raise RuntimeError("收到加密回调但未配置 FEISHU_ENCRYPT_KEY")
+    return _decrypt_feishu_encrypt(encrypt, key)
+
+
+def _tracking_fields_to_payload(fields: dict) -> dict:
+    def _t(key: str) -> str:
+        val = fields.get(key)
+        if val is None:
+            return ""
+        if isinstance(val, list):
+            parts = []
+            for item in val:
+                if isinstance(item, dict):
+                    parts.append(str(item.get("text") or item.get("name") or ""))
+                else:
+                    parts.append(str(item))
+            return "、".join(p for p in parts if p)
+        if isinstance(val, dict):
+            return str(val.get("text") or val.get("name") or "")
+        return str(val)
+
+    return {
+        "store_name": _t("门店名称"),
+        "store_code": _t("门店编码"),
+        "region": _t("区域"),
+        "vin": _t("VIN"),
+        "name": _t("客户姓名"),
+        "customer_category": _t("客户类别"),
+        "vip_level": _t("VIP级别"),
+        "vip_attrs": _t("VIP属性"),
+        "series": _t("车系"),
+        "aftersales_series": _t("售后车系"),
+        "task_type": _t("任务类型"),
+        "task_status": _t("任务状态"),
+        "driver_name": _t("用车人名称"),
+        "owner_name": _t("车主名称"),
+        "next_appointment_at": _t("下次预约时间"),
+        "due_at": _t("到期日期"),
+        "created_at": _t("任务创建日期"),
+        "task_code": _t("任务编码"),
+    }
+
+
+# 卡片回调去重：新旧回调可能各打一次
+_card_callback_seen: dict[str, float] = {}
+_card_callback_lock = threading.Lock()
+
+
+def _card_callback_should_skip(record_id: str) -> bool:
+    """同一 record_id 3 秒内重复回调直接快速成功。"""
+    now = time.time()
+    with _card_callback_lock:
+        # 清理过期
+        expired = [k for k, ts in _card_callback_seen.items() if now - ts > 60]
+        for k in expired:
+            _card_callback_seen.pop(k, None)
+        prev = _card_callback_seen.get(record_id)
+        if prev is not None and now - prev < 3:
+            return True
+        _card_callback_seen[record_id] = now
+        return False
+
+
+def _async_mark_store_reminded(
+    record_id: str,
+    *,
+    open_id: str,
+    message_id: str,
+    card: dict,
+) -> None:
+    try:
+        from tracking_bitable import mark_store_reminded
+        from feishu_client import patch_card_message
+
+        mark_store_reminded(record_id, confirmer_open_id=open_id)
+        if message_id:
+            try:
+                patch_card_message(message_id, card)
+            except Exception as exc:
+                print(f"[feishu-card] async patch failed: {exc}")
+    except Exception as exc:
+        print(f"[feishu-card] async mark failed: {exc}")
+
+
+@app.route("/feishu/card", methods=["GET", "POST"])
+def feishu_card_callback():
+    """HeroClaw 卡片回传：URL 校验 +「已提醒门店」闭环回写。
+
+    兼容两种回调体：
+    - 旧版：顶层 open_id / action / token
+    - 新版 card.action.trigger：header + event.operator / event.action
+
+    须在 3 秒内响应（否则客户端报 200341）。回写多维表与 PATCH 消息异步执行。
+    """
+    if request.method == "GET":
+        return jsonify({"ok": True, "service": "vip-alert-card-callback"})
+
+    raw = request.get_data()
+    try:
+        body = _maybe_decrypt_feishu_body(raw)
+    except Exception as exc:
+        print(f"[feishu-card] parse/decrypt failed: {exc}")
+        return jsonify({"error": f"invalid body: {exc}"}), 400
+
+    # URL 校验挑战（明文或解密后）
+    if body.get("type") == "url_verification" or (
+        body.get("challenge") and not body.get("action") and not body.get("event")
+    ):
+        challenge = body.get("challenge") or ""
+        expected = _feishu_verification_token()
+        token = (
+            (body.get("token") or "").strip()
+            or str((body.get("header") or {}).get("token") or "").strip()
+        )
+        if expected and token and token != expected:
+            return jsonify({"error": "invalid verification token"}), 403
+        return jsonify({"challenge": challenge})
+
+    event = body.get("event") if isinstance(body.get("event"), dict) else {}
+    header = body.get("header") if isinstance(body.get("header"), dict) else {}
+
+    expected = _feishu_verification_token()
+    token = (
+        (body.get("token") or "").strip()
+        or str(header.get("token") or "").strip()
+    )
+    # 新版卡片交互的 event.token 是更新卡片凭证，不是 Verification Token
+    if expected and token and token != expected:
+        if not str(token).startswith("c-"):
+            return jsonify({"error": "invalid token"}), 403
+
+    action = body.get("action") if isinstance(body.get("action"), dict) else {}
+    if not action and isinstance(event.get("action"), dict):
+        action = event.get("action") or {}
+
+    value = action.get("value")
+    if value is None:
+        value = {}
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except Exception:
+            value = {"raw": value}
+    if not isinstance(value, dict):
+        value = {}
+
+    action_name = str(
+        value.get("action")
+        or value.get("Action")
+        or action.get("name")
+        or ""
+    ).strip()
+    record_id = str(
+        value.get("record_id")
+        or value.get("recordId")
+        or ""
+    ).strip()
+
+    if action_name != "store_reminded" or not record_id:
+        print(
+            "[feishu-card] unknown action "
+            f"keys={list(body.keys())} event_keys={list(event.keys())} "
+            f"action_keys={list(action.keys())} value={value!r} "
+            f"tag={action.get('tag')!r}"
+        )
+        return jsonify({"toast": {"type": "error", "content": "未知操作"}})
+
+    open_id = (
+        body.get("open_id")
+        or (body.get("operator") or {}).get("open_id")
+        or (event.get("operator") or {}).get("open_id")
+        or ""
+    )
+    open_id = str(open_id).strip()
+
+    ctx = event.get("context") if isinstance(event.get("context"), dict) else {}
+    message_id = str(
+        ctx.get("open_message_id")
+        or body.get("open_message_id")
+        or ""
+    ).strip()
+
+    from feishu_client import build_vip_alert_card
+
+    confirmed_at = beijing_strftime("%Y-%m-%d %H:%M:%S")
+    # 用回调 value 快速组卡，避免同步拉多维表超时（200341）
+    payload = {
+        "task_code": value.get("task_code") or "",
+        "vin": value.get("vin") or "",
+        "name": value.get("name") or "",
+        "store_name": value.get("store_name") or "",
+        "region": value.get("region") or "",
+    }
+    card = build_vip_alert_card(
+        payload,
+        role="supervisor",
+        tracking_record_id=record_id,
+        confirmed=True,
+        confirmed_at=confirmed_at,
+    )
+
+    skip_dup = _card_callback_should_skip(record_id)
+    if not skip_dup:
+        threading.Thread(
+            target=_async_mark_store_reminded,
+            kwargs={
+                "record_id": record_id,
+                "open_id": open_id,
+                "message_id": message_id,
+                "card": card,
+            },
+            daemon=True,
+        ).start()
+
+    toast = {"type": "success", "content": "已记录：已提醒门店"}
+    if body.get("schema") == "2.0" or header.get("event_type") == "card.action.trigger":
+        return jsonify({"toast": toast, "card": {"type": "raw", "data": card}})
+    # 旧版：直接返回卡片 JSON
+    return jsonify(card)
+
+
 # ── VIP 任务 ────────────────────────────────────────────────
 
 _task_state = {

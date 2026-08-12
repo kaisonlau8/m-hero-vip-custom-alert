@@ -3,3 +3,4 @@ openpyxl>=3.1,<4
 python-dotenv>=1.0
 playwright>=1.52,<2
 flask>=3.0
+pycryptodome>=3.20
