@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from dfmc_browser_utils import (
     DEFAULT_BROWSER_CANDIDATES,
+    DEFAULT_BROWSER_NAME,
     DEFAULT_TARGET_URL,
     detect_browser,
     find_free_port,
@@ -141,7 +142,7 @@ def main() -> int:
     parser.add_argument("--target-url", default=DEFAULT_TARGET_URL)
     parser.add_argument("--browser-profile-dir", default="")
     parser.add_argument("--state-file", default="")
-    parser.add_argument("--browser", choices=sorted(DEFAULT_BROWSER_CANDIDATES.keys()), default="chrome")
+    parser.add_argument("--browser", choices=sorted(DEFAULT_BROWSER_CANDIDATES.keys()), default=DEFAULT_BROWSER_NAME)
     parser.add_argument("--browser-executable", default="")
     args = parser.parse_args()
 

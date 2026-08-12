@@ -49,8 +49,10 @@ ensure_beijing_tz()
 
 from dfmc_browser_utils import (  # noqa: E402
     DEFAULT_BROWSER_CANDIDATES,
+    DEFAULT_BROWSER_NAME,
     DEFAULT_TARGET_URL,
     SESSION_HOME_ENV,
+    browser_label,
     cdp_is_ready,
     detect_browser,
     dms_page_alive,
@@ -58,8 +60,10 @@ from dfmc_browser_utils import (  # noqa: E402
     get_browser_profile_dir,
     get_runtime_dir,
     get_session_home,
+    is_cdp_browser_command,
     process_is_running,
     recover_browser_state,
+    resolve_executable_from_command,
     write_browser_state,
 )
 
@@ -118,9 +122,7 @@ def _find_existing_browser() -> dict | None:
             line = line.strip()
             if profile_dir not in line:
                 continue
-            if "Helper" in line:
-                continue
-            if "Google Chrome" not in line and "Microsoft Edge" not in line:
+            if not is_cdp_browser_command(line):
                 continue
 
             parts = line.split(None, 1)
@@ -134,15 +136,10 @@ def _find_existing_browser() -> dict | None:
                     break
 
             if new_port and _cdp_port_alive(new_port):
-                executable = (
-                    DEFAULT_BROWSER_CANDIDATES["chrome"]
-                    if "Google Chrome" in cmd
-                    else DEFAULT_BROWSER_CANDIDATES.get("edge", "")
-                )
                 return {
                     "pid": new_pid,
                     "port": new_port,
-                    "browserExecutable": executable,
+                    "browserExecutable": resolve_executable_from_command(cmd),
                     "browserProfileDir": profile_dir,
                     "targetUrl": DEFAULT_TARGET_URL,
                     "startedAt": "",
@@ -181,12 +178,23 @@ def _load_browser_state() -> dict | None:
 
 
 def _detect_available_browsers() -> list[dict]:
+    env_path = os.environ.get("DFMC_DMS_BROWSER_EXECUTABLE")
+    env_default = bool(env_path and Path(env_path).exists())
     browsers = []
+    if env_default:
+        browsers.append({
+            "name": "custom",
+            "path": env_path,
+            "available": True,
+            "label": f"Chromium ({Path(env_path).name})",
+            "default": True,
+        })
     for name, path in DEFAULT_BROWSER_CANDIDATES.items():
         browsers.append({
             "name": name,
-            "label": "Google Chrome" if name == "chrome" else "Microsoft Edge",
+            "label": browser_label(name),
             "available": Path(path).exists(),
+            "default": (not env_default) and name == DEFAULT_BROWSER_NAME,
         })
     return browsers
 
@@ -647,7 +655,7 @@ def api_recorder_list():
 
 @app.route("/api/browser/launch", methods=["POST"])
 def api_browser_launch():
-    browser_name = request.json.get("browser", "chrome") if request.json else "chrome"
+    browser_name = request.json.get("browser", DEFAULT_BROWSER_NAME) if request.json else DEFAULT_BROWSER_NAME
 
     existing_state = _load_browser_state()
     if existing_state and _cdp_port_alive(int(existing_state.get("port") or 0)):

@@ -6,8 +6,8 @@
 	<string>com.m-hero-vip-custom-alert.watchdog</string>
 	<key>ProgramArguments</key>
 	<array>
-		<string>/Users/i/myCode/m-hero-vip-custom-alert/.venv/bin/python</string>
-		<string>/Users/i/myCode/m-hero-vip-custom-alert/scripts/health_watchdog.py</string>
+		<string>/Users/i/myCode/m-hero/m-hero-vip-custom-alert/.venv/bin/python</string>
+		<string>/Users/i/myCode/m-hero/m-hero-vip-custom-alert/scripts/health_watchdog.py</string>
 		<string>--url</string>
 		<string>http://127.0.0.1:9002/api/vip/status</string>
 		<string>--interval</string>
@@ -16,7 +16,7 @@
 		<string>1800</string>
 	</array>
 	<key>WorkingDirectory</key>
-	<string>/Users/i/myCode/m-hero-vip-custom-alert</string>
+	<string>/Users/i/myCode/m-hero/m-hero-vip-custom-alert</string>
 	<key>EnvironmentVariables</key>
 	<dict>
 		<key>TZ</key>
