@@ -1,29 +1,32 @@
 # 共享浏览器会话
 
-本项目与事故车提醒共用同一 Playwright Chromium profile 与 CDP 会话（不占用本机 Chrome）。
+本项目与 **事故车提醒**、**区域报表自动化** 共用同一 Playwright Chromium profile 与 CDP 会话（不占用本机 Chrome）。
+
+权威说明：[m-hero/docs/SHARED_DMS_BROWSER.md](https://github.com/kaisonlau8/m-hero/blob/main/docs/SHARED_DMS_BROWSER.md)
 
 ## 配置
 
-在 `.env` 中设置与事故车相同的路径：
+在 `.env` 中设置：
 
 ```env
 DFMC_DMS_SESSION_HOME=/Users/i/dms-shared-session
-DFMC_DMS_BROWSER_EXECUTABLE=/Users/i/Library/Caches/ms-playwright/chromium-*/chrome-mac-*/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing
+DFMC_DMS_BROWSER_EXECUTABLE=/Users/i/Library/Caches/ms-playwright/chromium-1217/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing
 ```
-
-目录结构：
 
 ```text
 $DFMC_DMS_SESSION_HOME/
-  .browser-profile/       # Chromium user-data-dir
+  .browser-profile/
   .runtime/
-    browser-state.json    # CDP port / pid
+    browser-state.json
     keepalive-state.json
-    exporting.lock        # 爬虫互斥，保活遇锁跳过刷新
+    exporting.lock
+    crawl_schedule.json
+    crawl_registry.json
 ```
 
 ## 约定
 
+- 本系统默认 **09:00** 爬取；区域报表 08:30、事故车 10:00 / 17:00
+- 开跑前 3 分钟至登记完成期间不会被保活强刷
 - 同一时刻只跑一个导出爬虫（`exporting.lock`）
-- 本系统默认 **09:00**，事故车 **10:00**，避免冲突
-- 登录一次即可：任一控制台「启动登录」后其余插件附着同一会话
+- 任一控制台完成 DMS 登录后，其余插件附着同一会话

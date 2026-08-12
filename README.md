@@ -2,6 +2,15 @@
 
 每日监控 DMS 保养提醒任务，命中 VIP 客户清单后，通过飞书应用 **HeroClaw** 通知多维表格中登记的提醒人。
 
+> 工具集总览 / 文档地图 / 依赖关系：[m-hero](https://github.com/kaisonlau8/m-hero)
+
+| 项 | 值 |
+|----|-----|
+| 本地控制台 | `http://127.0.0.1:9002` |
+| 公网 | http://127.0.0.1:9002 |
+| 黄页 | http://127.0.0.1:9004 |
+| 共享会话 | 与事故车、区域报表共用 DMS Chromium（[shared-browser-session.md](docs/shared-browser-session.md)） |
+
 ## 能力
 
 | 时间 | 动作 |
@@ -69,8 +78,9 @@ CLI：
 详见 [docs/deploy-mac-studio.md](docs/deploy-mac-studio.md)。
 
 1. 控制台端口 **9002**，公网 http://127.0.0.1:9002  
-2. 可选：与事故车共用 `DFMC_DMS_SESSION_HOME`（见 [docs/shared-browser-session.md](docs/shared-browser-session.md)）  
-3. launchd 托管控制台 + Cloudflare Tunnel + 挂死监控（飞书通知刘明轩）  
+2. 与事故车 / 区域报表共用 `DFMC_DMS_SESSION_HOME`（见 [docs/shared-browser-session.md](docs/shared-browser-session.md)）；开跑前 3 分钟至登记完成禁强刷  
+3. launchd 托管控制台 + Cloudflare Tunnel + 挂死监控（飞书通知）  
+
 
 # 时区锁定（UTC+8 北京）
 调度、日志、文件名时间戳一律使用 `Asia/Shanghai`：
