@@ -7,8 +7,7 @@
 | 项 | 值 |
 |----|-----|
 | 本地控制台 | `http://127.0.0.1:9002` |
-| 公网 | http://127.0.0.1:9002 |
-| 黄页 | http://127.0.0.1:9004 |
+| 黄页（本地） | `http://127.0.0.1:9004` |
 | 共享会话 | 与事故车、区域报表共用 DMS Chromium（[shared-browser-session.md](docs/shared-browser-session.md)） |
 
 ## 能力
@@ -77,7 +76,7 @@ CLI：
 
 详见 [docs/deploy-mac-studio.md](docs/deploy-mac-studio.md)。
 
-1. 控制台端口 **9002**，公网 http://127.0.0.1:9002  
+1. 控制台端口 **9002**（公网 hostname 仅写本机 cloudflared，不入库）  
 2. 与事故车 / 区域报表共用 `DFMC_DMS_SESSION_HOME`（见 [docs/shared-browser-session.md](docs/shared-browser-session.md)）；开跑前 3 分钟至登记完成禁强刷  
 3. launchd 托管控制台 + Cloudflare Tunnel + 挂死监控（飞书通知）  
 

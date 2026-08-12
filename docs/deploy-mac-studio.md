@@ -6,8 +6,8 @@
 |----|-----|
 | 目录 | `~/myCode/m-hero-vip-custom-alert` |
 | 控制台 | `127.0.0.1:9002` |
-| 公网 | http://127.0.0.1:9002 |
-| 监控 | launchd `com.m-hero-vip-custom-alert.watchdog` → 飞书通知刘明轩 |
+| 公网 | Cloudflare Tunnel hostname（本机配置，不写仓库） |
+| 监控 | launchd `com.m-hero-vip-custom-alert.watchdog` → 飞书通知 |
 
 ## 一键步骤（在 Mac Studio）
 
@@ -38,7 +38,6 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.cloudflare.cloudflar
 ## 探活
 
 ```bash
-curl -sS http://127.0.0.1:9002/api/vip/status
 curl -sS http://127.0.0.1:9002/api/vip/status
 launchctl list | grep m-hero-vip
 ```
