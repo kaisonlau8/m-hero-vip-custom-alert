@@ -10,7 +10,7 @@
 
 ```env
 DFMC_DMS_SESSION_HOME=/Users/i/dms-shared-session
-DFMC_DMS_BROWSER_EXECUTABLE=/Users/i/Library/Caches/ms-playwright/chromium-1217/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing
+DFMC_DMS_BROWSER_EXECUTABLE=/path/to/Google Chrome for Testing
 ```
 
 ```text
@@ -24,9 +24,25 @@ $DFMC_DMS_SESSION_HOME/
     crawl_registry.json
 ```
 
+## 爬取时刻表（与本项目相关）
+
+共享文件：`$DFMC_DMS_SESSION_HOME/.runtime/crawl_schedule.json`
+
+| id | 计划时间 | 本仓任务 | owner |
+|----|----------|----------|--------|
+| `vip-alert` | **09:00** | 导出保养提醒 → 匹配发送 | `vip_maintenance_reminder` |
+
+错峰邻居：区域报表 `08:30`，事故车 `10:00` / `17:00`。
+
+保护规则：
+
+- **09:00 前 3 分钟**起禁刷，直至本爬取登记结束
+- 到点未开跑时，最长禁刷至约 `09:00 + 45min`
+- `acquire_export_lock(..., schedule_id="vip-alert")` 时自动登记
+
+改 09:00 调度时，同步改时刻表里 `vip-alert.time`。
+
 ## 约定
 
-- 本系统默认 **09:00** 爬取；区域报表 08:30、事故车 10:00 / 17:00
-- 开跑前 3 分钟至登记完成期间不会被保活强刷
 - 同一时刻只跑一个导出爬虫（`exporting.lock`）
 - 任一控制台完成 DMS 登录后，其余插件附着同一会话

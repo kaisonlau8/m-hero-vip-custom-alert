@@ -77,7 +77,7 @@ CLI：
 详见 [docs/deploy-mac-studio.md](docs/deploy-mac-studio.md)。
 
 1. 控制台端口 **9002**（公网 hostname 仅写本机 cloudflared，不入库）  
-2. 与事故车 / 区域报表共用 `DFMC_DMS_SESSION_HOME`（见 [docs/shared-browser-session.md](docs/shared-browser-session.md)）；开跑前 3 分钟至登记完成禁强刷  
+2. 与事故车 / 区域报表共用 `DFMC_DMS_SESSION_HOME`；时刻表条目 `vip-alert` = **09:00**（提前 3 分钟禁强刷，见 [docs/shared-browser-session.md](docs/shared-browser-session.md)）  
 3. launchd 托管控制台 + Cloudflare Tunnel + 挂死监控（飞书通知）  
 
 
