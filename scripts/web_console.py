@@ -10,7 +10,6 @@ import subprocess
 import sys
 import threading
 import time
-import urllib.request
 from datetime import datetime
 from pathlib import Path
 
@@ -54,16 +53,22 @@ from dfmc_browser_utils import (  # noqa: E402
     SESSION_HOME_ENV,
     browser_label,
     cdp_is_ready,
+    collect_page_hints,
+    build_shared_chromium_command,
     detect_browser,
     dms_page_alive,
     find_free_port,
     get_browser_profile_dir,
+    get_keepalive_log_path,
     get_runtime_dir,
     get_session_home,
     is_cdp_browser_command,
+    ensure_dms_tab,
+    launch_shared_cdp_browser,
     process_is_running,
     recover_browser_state,
     resolve_executable_from_command,
+    rotate_keepalive_log,
     write_browser_state,
 )
 
@@ -257,6 +262,12 @@ def _coerce_epoch(value) -> int:
     return 0
 
 
+def _session_hint_for_port(port: int) -> str:
+    if not port or not _cdp_port_alive(port):
+        return ""
+    return str(collect_page_hints(port).get("hint") or "")
+
+
 def _get_keepalive_info() -> dict:
     state = _load_keepalive_runtime()
     running = _keepalive_process_running()
@@ -266,6 +277,11 @@ def _get_keepalive_info() -> dict:
     started_at = _coerce_epoch(state.get("startedAt"))
     if running and not next_refresh_at and started_at:
         next_refresh_at = started_at + interval
+    browser = _load_browser_state() or {}
+    port = int(browser.get("port") or 0)
+    last_result = str(state.get("lastResult") or "")
+    session_hint = _session_hint_for_port(port)
+    need_login = last_result == "need_login" or session_hint in {"login", "sso"}
     return {
         "running": running,
         "pid": int(state.get("pid") or 0),
@@ -274,9 +290,23 @@ def _get_keepalive_info() -> dict:
         "last_action_at_epoch": _coerce_epoch(state.get("lastActionAt")),
         "next_refresh_at_epoch": next_refresh_at,
         "seconds_left": max(next_refresh_at - now_ts, 0) if running and next_refresh_at else 0,
-        "last_result": state.get("lastResult", ""),
+        "last_result": last_result,
         "cycle": int(state.get("cycle") or 0),
+        "session_hint": session_hint,
+        "need_login": need_login,
     }
+
+
+def _prepare_shared_browser() -> dict | None:
+    browser = _load_browser_state()
+    port = int((browser or {}).get("port") or 0)
+    if port and _cdp_port_alive(port):
+        ensure_dms_tab(port)
+        return browser
+    try:
+        return launch_shared_cdp_browser(PLUGIN_ROOT)
+    except Exception:
+        return browser or None
 
 
 def _stop_keepalive_process() -> None:
@@ -293,13 +323,13 @@ def _stop_keepalive_process() -> None:
 
 
 def _ensure_keepalive_process() -> bool:
-    browser = _load_browser_state()
+    browser = _prepare_shared_browser()
     if not browser:
         _stop_keepalive_process()
         return False
 
     port = int(browser.get("port") or 0)
-    if not port or not _cdp_port_alive(port) or not _dms_page_alive(port):
+    if not port or not _cdp_port_alive(port):
         _stop_keepalive_process()
         return False
 
@@ -310,24 +340,31 @@ def _ensure_keepalive_process() -> bool:
     python_bin = PLUGIN_ROOT / ".venv" / "bin" / "python"
     if not python_bin.exists():
         python_bin = Path(sys.executable)
+    log_path = get_keepalive_log_path(PLUGIN_ROOT)
 
     try:
         now_ts = int(time.time())
         interval = 300
-        proc = subprocess.Popen(
-            [
-                str(python_bin),
-                str(keepalive_script),
-                "--state-file",
-                str(RUNTIME_DIR / "browser-state.json"),
-                "--status-file",
-                str(RUNTIME_DIR / "keepalive-state.json"),
-            ],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
+        rotate_keepalive_log(log_path)
+        log_fp = open(log_path, "a", encoding="utf-8")
+        try:
+            proc = subprocess.Popen(
+                [
+                    str(python_bin),
+                    "-u",
+                    str(keepalive_script),
+                    "--state-file",
+                    str(RUNTIME_DIR / "browser-state.json"),
+                    "--status-file",
+                    str(RUNTIME_DIR / "keepalive-state.json"),
+                ],
+                stdin=subprocess.DEVNULL,
+                stdout=log_fp,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+        finally:
+            log_fp.close()
     except Exception:
         return False
 
@@ -573,9 +610,9 @@ def dashboard():
     browser_ok = False
     if browser:
         port = int(browser.get("port") or 0)
-        browser_ok = bool(port and _cdp_port_alive(port) and _dms_page_alive(port))
-        if browser_ok:
+        if port and _cdp_port_alive(port):
             _ensure_keepalive_process()
+        browser_ok = bool(port and _cdp_port_alive(port) and _dms_page_alive(port))
 
     keepalive_info = _get_keepalive_info()
     recorder_info = _get_recorder_info()
@@ -603,9 +640,9 @@ def api_status():
     if browser:
         pid = browser.get("pid", 0)
         port = int(browser.get("port") or 0)
-        browser_ok = bool(port and _cdp_port_alive(port) and _dms_page_alive(port))
-        if browser_ok:
+        if port and _cdp_port_alive(port):
             _ensure_keepalive_process()
+        browser_ok = bool(port and _cdp_port_alive(port) and _dms_page_alive(port))
         browser_info = {
             "browser": Path(browser.get("browserExecutable", "")).stem,
             "pid": pid,
@@ -660,15 +697,7 @@ def api_browser_launch():
     existing_state = _load_browser_state()
     if existing_state and _cdp_port_alive(int(existing_state.get("port") or 0)):
         port = int(existing_state.get("port") or 0)
-        if not _dms_page_alive(port):
-            try:
-                req = urllib.request.Request(
-                    f"http://127.0.0.1:{port}/json/new?https%3A%2F%2Fm-dms.dfmc.com.cn",
-                    method="PUT",
-                )
-                urllib.request.urlopen(req, timeout=3).read()
-            except Exception:
-                pass
+        ensure_dms_tab(port)
         write_browser_state(RUNTIME_DIR / "browser-state.json", existing_state)
         _ensure_keepalive_process()
         return jsonify({
@@ -689,14 +718,7 @@ def api_browser_launch():
     browser_profile_dir = BROWSER_PROFILE_DIR
     target_url = DEFAULT_TARGET_URL
 
-    cmd = [
-        str(browser_executable),
-        f"--remote-debugging-port={port}",
-        f"--user-data-dir={browser_profile_dir}",
-        "--no-first-run",
-        "--disable-default-apps",
-        target_url,
-    ]
+    cmd = build_shared_chromium_command(browser_executable, port, browser_profile_dir)
 
     try:
         proc = subprocess.Popen(
@@ -734,6 +756,7 @@ def api_browser_launch():
         "targetUrl": target_url,
         "startedAt": _now_iso(),
     })
+    ensure_dms_tab(port)
 
     app_name = browser_executable.stem
     try:
@@ -1184,15 +1207,42 @@ def _scheduler_loop() -> None:
     _task_state["scheduler_running"] = False
 
 
-@app.route("/api/vip/scheduler/start", methods=["POST"])
-def api_vip_scheduler_start():
+VIP_SCHEDULER_FLAG = RUNTIME_DIR / "vip-scheduler-enabled.json"
+
+
+def _set_scheduler_enabled(enabled: bool) -> None:
+    VIP_SCHEDULER_FLAG.write_text(
+        json.dumps({"enabled": bool(enabled)}, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _scheduler_was_enabled() -> bool:
+    if not VIP_SCHEDULER_FLAG.exists():
+        return False
+    try:
+        return bool(json.loads(VIP_SCHEDULER_FLAG.read_text(encoding="utf-8")).get("enabled"))
+    except Exception:
+        return False
+
+
+def _start_vip_scheduler() -> bool:
     if _task_state["scheduler_running"]:
-        return jsonify({"ok": True, "message": "调度已在运行"})
+        return True
     _task_state["scheduler_stop"] = False
     _task_state["scheduler_running"] = True
     t = threading.Thread(target=_scheduler_loop, daemon=True)
     _task_state["scheduler_thread"] = t
     t.start()
+    _set_scheduler_enabled(True)
+    return True
+
+
+@app.route("/api/vip/scheduler/start", methods=["POST"])
+def api_vip_scheduler_start():
+    if _task_state["scheduler_running"]:
+        return jsonify({"ok": True, "message": "调度已在运行"})
+    _start_vip_scheduler()
     return jsonify({"ok": True, "message": "已启动定时等候（00:00 / 09:00）"})
 
 
@@ -1200,6 +1250,7 @@ def api_vip_scheduler_start():
 def api_vip_scheduler_stop():
     _task_state["scheduler_stop"] = True
     _task_state["scheduler_running"] = False
+    _set_scheduler_enabled(False)
     return jsonify({"ok": True, "message": "已停止定时等候"})
 
 
@@ -1212,6 +1263,9 @@ def main() -> int:
 
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
     _start_keepalive_watchdog()
+    if _scheduler_was_enabled():
+        _start_vip_scheduler()
+        print("VIP scheduler restored (00:00 / 09:00)")
     shared = bool((os.environ.get(SESSION_HOME_ENV) or "").strip())
     print(f"VIP 保养提醒控制台: http://{args.host}:{args.port}")
     print(f"Session home: {SESSION_HOME}" + (" (shared via DFMC_DMS_SESSION_HOME)" if shared else " (plugin local)"))

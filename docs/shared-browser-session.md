@@ -19,6 +19,7 @@ $DFMC_DMS_SESSION_HOME/
   .runtime/
     browser-state.json
     keepalive-state.json
+    keepalive.log
     exporting.lock
     crawl_schedule.json
     crawl_registry.json
@@ -46,3 +47,4 @@ $DFMC_DMS_SESSION_HOME/
 
 - 同一时刻只跑一个导出爬虫（`exporting.lock`）
 - 任一控制台完成 DMS 登录后，其余插件附着同一会话
+- 冷启动带 `--disable-extensions` 与 `--use-mock-keychain`，避免每次输 macOS 密码；换参数后可能要重登一次 DMS
