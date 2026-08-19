@@ -29,6 +29,7 @@ from dfmc_browser_utils import (  # noqa: E402
     connect_browser_over_cdp,
     ensure_cdp_browser_running,
     find_dms_page,
+    goto_dms_route,
     get_default_state_file,
     get_export_lock_path,
     get_session_home,
@@ -54,26 +55,7 @@ def validate_logged_in(page: Page) -> None:
 
 
 def navigate_to_reminder_page(page: Page) -> None:
-    try:
-        page.evaluate(f"window.location.hash = '{REMINDER_ROUTE}'")
-    except Error:
-        current_url = page.url
-        if "?code=" in current_url:
-            code = current_url.split("?code=")[1].split("#")[0].split("&")[0]
-            target = f"https://{DMS_HOST}/?code={code}#{REMINDER_ROUTE}"
-            page.goto(target, wait_until="domcontentloaded", timeout=15_000)
-        else:
-            page.goto(
-                f"https://{DMS_HOST}#{REMINDER_ROUTE}",
-                wait_until="domcontentloaded",
-                timeout=15_000,
-            )
-
-    try:
-        page.wait_for_selector("section.mixButton, .el-table, .u-btn-left", timeout=20_000)
-    except Error:
-        page.wait_for_timeout(2_000)
-    page.wait_for_timeout(800)
+    goto_dms_route(page, REMINDER_ROUTE)
 
 
 def click_query(page: Page) -> None:
