@@ -65,6 +65,8 @@ from dfmc_browser_utils import (  # noqa: E402
     is_cdp_browser_command,
     ensure_dms_tab,
     launch_shared_cdp_browser,
+    load_session_monitor,
+    observe_dms_session,
     process_is_running,
     recover_browser_state,
     resolve_executable_from_command,
@@ -281,7 +283,13 @@ def _get_keepalive_info() -> dict:
     port = int(browser.get("port") or 0)
     last_result = str(state.get("lastResult") or "")
     session_hint = _session_hint_for_port(port)
-    need_login = last_result == "need_login" or session_hint in {"login", "sso"}
+    monitor = load_session_monitor(PLUGIN_ROOT)
+    monitor_status = str((monitor.get("current") or {}).get("status") or "")
+    need_login = (
+        last_result == "need_login"
+        or session_hint in {"login", "sso"}
+        or monitor_status == "logged_out"
+    )
     return {
         "running": running,
         "pid": int(state.get("pid") or 0),
@@ -294,6 +302,7 @@ def _get_keepalive_info() -> dict:
         "cycle": int(state.get("cycle") or 0),
         "session_hint": session_hint,
         "need_login": need_login,
+        "session_monitor": monitor,
     }
 
 
@@ -383,6 +392,10 @@ def _keepalive_watchdog_loop() -> None:
     while not keepalive_state["stop"]:
         try:
             _ensure_keepalive_process()
+        except Exception:
+            pass
+        try:
+            observe_dms_session(PLUGIN_ROOT, source="watchdog")
         except Exception:
             pass
         time.sleep(30)
@@ -665,6 +678,7 @@ def api_status():
         "recordings": _list_recordings(10),
         "session_home": str(SESSION_HOME),
         "session_shared": bool((os.environ.get(SESSION_HOME_ENV) or "").strip()),
+        "session_monitor": keepalive_info.get("session_monitor") or load_session_monitor(PLUGIN_ROOT),
     })
 
 

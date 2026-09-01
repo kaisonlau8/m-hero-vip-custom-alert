@@ -40,6 +40,7 @@ $DFMC_DMS_SESSION_HOME/
 - **09:00 前 3 分钟**起禁刷，直至本爬取登记结束
 - 到点未开跑时，最长禁刷至约 `09:00 + 45min`
 - `acquire_export_lock(..., schedule_id="vip-alert")` 时自动登记
+- 每次爬取结束后在当前标签打开 `https://m-dms.dfmc.com.cn/` 做一次整页跳转（等同地址栏重输）
 
 改 09:00 调度时，同步改时刻表里 `vip-alert.time`。
 

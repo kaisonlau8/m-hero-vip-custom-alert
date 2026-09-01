@@ -33,6 +33,7 @@ from dfmc_browser_utils import (  # noqa: E402
     get_default_state_file,
     get_export_lock_path,
     get_session_home,
+    hard_refresh_dms,
     release_export_lock,
 )
 from time_utils import beijing_strftime, beijing_today, ensure_beijing_tz  # noqa: E402
@@ -238,6 +239,11 @@ def crawl(*, output_dir: Path | None = None, dry_run: bool = False) -> dict:
             )
         except Exception:
             pass
+    finally:
+        try:
+            hard_refresh_dms(plugin_root, label="post-crawl")
+        except Exception as exc:
+            print(f"  [WARN] post-crawl hard refresh failed: {exc}")
 
     manifest = {
         "crawledAt": beijing_strftime("%Y-%m-%d %H:%M:%S"),
