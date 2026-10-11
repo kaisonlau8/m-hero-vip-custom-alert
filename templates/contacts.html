@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}联系人 — VIP 保养提醒{% endblock %}
+{% block content %}
+<header class="ant-page-header">
+  <div class="ant-page-header-heading">
+    <h1>门店联系人</h1>
+    <div class="ant-page-header-sub">门店 / 督导 / 区域来自飞书多维表格，全国收件人在本系统单独维护</div>
+  </div>
+</header>
+
+{% if sync_message %}
+<div class="ant-alert {{ 'ant-alert-success' if sync_ok else 'ant-alert-error' }}">
+  <span class="ant-alert-icon"><svg class="ai" aria-hidden="true"><use href="{{ '#i-check-circle' if sync_ok else '#i-close-circle' }}"/></svg></span>
+  <div class="ant-alert-content">{{ sync_message }}</div>
+</div>
+{% endif %}
+
+<div class="ant-card">
+  <div class="ant-card-head"><h2 class="ant-card-head-title">从飞书多维表格同步</h2></div>
+  <div class="ant-card-body">
+  <p class="muted">店代码、区域、督导、售后负责人来自「参与考核特约店清单」。VIP 仍按「区域 × VIP 级别」提醒人表发送，这里的全国收件人只额外抄送无按钮通知。每天 00:00 会随提醒人表一起同步。</p>
+  {% if sync_state.synced_at %}
+  <p class="muted">最近同步：{{ sync_state.synced_at }}，门店 {{ sync_state.store_count or 0 }} 家，区域 {{ sync_state.region_count or 0 }} 个</p>
+  {% endif %}
+  <form method="post" action="/contacts/sync">
+    <button type="submit" class="ant-btn ant-btn-primary"><svg class="ai" aria-hidden="true"><use href="#i-reload"/></svg>立即同步</button>
+  </form>
+  </div>
+</div>
+
+<div class="ant-card">
+  <div class="ant-card-head"><h2 class="ant-card-head-title">门店列表 <span class="ant-card-head-sub">{{ store_list | length }} 家</span></h2></div>
+  <div class="ant-card-body">
+  <div class="tw ant-table-wrap"><table><thead><tr><th>店代码</th><th data-card-title>店名称</th><th>区域</th><th>督导</th><th>售后负责人</th></tr></thead>
+    <tbody>
+    {% for s in store_list %}
+    <tr>
+      <td>{{ s.code }}</td>
+      <td>{{ s.name }}</td>
+      <td>{{ s.region }}</td>
+      <td>{{ s.supervisor }}</td>
+      <td>{% if s.manager_ok %}{{ s.manager or "已配置" }}{% else %}<span class="ant-tag ant-tag-error">无联系人</span>{% endif %}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5" class="muted">尚未同步</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  </div>
+</div>
+
+<div class="ant-card">
+  <div class="ant-card-head"><h2 class="ant-card-head-title">全国收件人</h2></div>
+  <div class="ant-card-body">
+  <p class="muted">只影响本系统。不选客户级别则抄送全部级别；勾选 S级 会包含「S级」和「S级（高管）」。同一人若已是该条提醒的收件人，不会再抄送一张。</p>
+  <form method="post" action="/contacts/national/add">
+    <div class="ant-form-row" style="align-items:end">
+      <div class="ant-form-item"><label class="ant-form-item-label" for="nn">姓名</label>
+        <div class="ant-form-item-control"><input class="ant-input" id="nn" name="name" required placeholder="姓名"></div></div>
+      <div class="ant-form-item"><label class="ant-form-item-label" for="np">手机号</label>
+        <div class="ant-form-item-control"><input class="ant-input" id="np" name="phone" required placeholder="飞书手机号"></div></div>
+      <div class="ant-form-item"><span class="ant-form-item-label">客户级别</span>
+        <div class="ant-form-item-control ant-flex">
+          <label class="ant-checkbox"><input type="checkbox" name="levels" value="S级"> S级</label>
+          <label class="ant-checkbox"><input type="checkbox" name="levels" value="A级"> A级</label>
+          <label class="ant-checkbox"><input type="checkbox" name="levels" value="B级"> B级</label>
+        </div></div>
+      <div class="ant-form-item" style="margin-bottom:0"><button type="submit" class="ant-btn ant-btn-primary"><svg class="ai" aria-hidden="true"><use href="#i-plus"/></svg>新增/更新</button></div>
+    </div>
+  </form>
+  <div class="tw ant-table-wrap ant-mt-3"><table><thead><tr><th data-card-title>姓名</th><th>手机号</th><th>客户级别</th><th>解析</th><th>操作</th></tr></thead>
+    <tbody>
+    {% for item in national_list %}
+    <tr>
+      <td>{{ item.name }}</td>
+      <td>{{ item.phone }}</td>
+      <td>{{ item.levels | join('、') if item.levels else '全部' }}</td>
+      <td>{% if item.resolved %}<span class="ant-tag ant-tag-success">已解析</span>{% else %}<span class="ant-tag ant-tag-error">未解析</span>{% endif %}</td>
+      <td>
+        <form method="post" action="/contacts/national/delete" onsubmit="return confirm('确认删除全国收件人：{{ item.name }}？');">
+          <input type="hidden" name="name" value="{{ item.name }}">
+          <input type="hidden" name="phone" value="{{ item.phone }}">
+          <button type="submit" class="ant-btn ant-btn-sm ant-btn-danger"><svg class="ai" aria-hidden="true"><use href="#i-delete"/></svg>删除</button>
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5" class="muted">暂无全国收件人</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  </div>
+</div>
+{% endblock %}
