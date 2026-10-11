@@ -13,7 +13,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, redirect, render_template, request, url_for
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PLUGIN_ROOT = SCRIPT_DIR.parent
@@ -78,6 +78,24 @@ app = Flask(
     __name__,
     template_folder=str(PLUGIN_ROOT / "templates"),
 )
+
+# --- 设计系统（antd-lite.css / sprite.svg，由 design-system/sync.sh 同步到 ds/）---
+_ds_cache: dict[str, str] = {}
+
+
+def _ds(name: str) -> str:
+    if name not in _ds_cache:
+        _ds_cache[name] = (PLUGIN_ROOT / "ds" / name).read_text(encoding="utf-8")
+    return _ds_cache[name]
+
+
+app.jinja_env.globals["ds_css"] = lambda: _ds("antd-lite.css")
+app.jinja_env.globals["ds_sprite"] = lambda: _ds("sprite.svg")
+app.jinja_env.globals["ds_cards"] = lambda: _ds("cards.js")
+
+# --- m-hero SSO (Casdoor): inert unless MHERO_AUTH[_VIP]=audit|on is set (see docs/SSO_CASDOOR.md) ---
+from mhero_auth.flask_adapter import init_app as _mhero_auth_init
+_mhero_auth_init(app, "vip", default_mode="off", public_paths=["/feishu/card"])
 
 # Session paths honor DFMC_DMS_SESSION_HOME for cross-crawler sharing
 RUNTIME_DIR = get_runtime_dir(PLUGIN_ROOT)
@@ -645,6 +663,74 @@ def dashboard():
     )
 
 
+@app.route("/contacts")
+def contacts_page():
+    from directory_sync import load_directory, load_sync_state, national_rows_for_page
+
+    directory = load_directory()
+    store_list = []
+    for store in directory.get("stores") or []:
+        manager = store.get("service_manager") or {}
+        supervisor = store.get("supervisor") or {}
+        store_list.append({
+            "code": store.get("code") or "",
+            "name": store.get("name") or "",
+            "region": store.get("region") or "",
+            "supervisor": supervisor.get("name") or "",
+            "manager": manager.get("name") or "",
+            "manager_ok": bool(manager.get("open_id") or manager.get("phone")),
+        })
+    store_list.sort(key=lambda item: (item["region"], item["code"]))
+    return render_template(
+        "contacts.html",
+        store_list=store_list,
+        national_list=national_rows_for_page(),
+        sync_state=load_sync_state(),
+        sync_ok=request.args.get("sync_ok") == "1",
+        sync_message=request.args.get("sync_msg", ""),
+    )
+
+
+@app.route("/contacts/sync", methods=["POST"])
+def contacts_sync():
+    from directory_sync import sync_directory
+
+    try:
+        result = sync_directory()
+        msg = f"同步成功：门店 {result.get('store_count', 0)} 家，区域 {result.get('region_count', 0)} 个"
+        return redirect(url_for("contacts_page", sync_ok="1", sync_msg=msg))
+    except Exception as exc:
+        return redirect(url_for("contacts_page", sync_ok="0", sync_msg=f"同步失败：{exc}"))
+
+
+@app.route("/contacts/national/add", methods=["POST"])
+def contacts_national_add():
+    from directory_sync import load_national_recipients, save_national_recipients
+
+    name = str(request.form.get("name") or "").strip()
+    phone = str(request.form.get("phone") or "").strip()
+    levels = request.form.getlist("levels")
+    if name or phone:
+        current = [item for item in load_national_recipients() if item.get("name") != name and item.get("phone") != phone]
+        current.append({"name": name, "phone": phone, "open_id": "", "levels": levels})
+        save_national_recipients(current)
+    return redirect(url_for("contacts_page"))
+
+
+@app.route("/contacts/national/delete", methods=["POST"])
+def contacts_national_delete():
+    from directory_sync import load_national_recipients, save_national_recipients
+
+    name = str(request.form.get("name") or "").strip()
+    phone = str(request.form.get("phone") or "").strip()
+    kept = [
+        item for item in load_national_recipients()
+        if not (item.get("name") == name and item.get("phone") == phone)
+    ]
+    save_national_recipients(kept)
+    return redirect(url_for("contacts_page"))
+
+
 @app.route("/api/status")
 def api_status():
     browser = _load_browser_state()
@@ -1142,8 +1228,14 @@ def api_vip_sync():
 
     def _job():
         from bitable_sync import sync_all
+        from directory_sync import sync_directory
 
-        return sync_all()
+        vip = sync_all()
+        try:
+            vip["directory"] = sync_directory()
+        except Exception as exc:
+            vip["directory_error"] = str(exc)
+        return vip
 
     _run_in_thread(_job)
     return jsonify({"ok": True, "message": "已开始同步多维表"})
@@ -1189,6 +1281,7 @@ def api_vip_crawl():
 
 def _scheduler_loop() -> None:
     from bitable_sync import sync_all
+    from directory_sync import sync_directory
     from pipeline import run_pipeline
 
     fired = {"00:00": False, "09:00": False}
@@ -1198,7 +1291,12 @@ def _scheduler_loop() -> None:
             fired["00:00"] = True
             try:
                 _task_state["running"] = True
-                _task_state["last_result"] = sync_all()
+                result = sync_all()
+                try:
+                    result["directory"] = sync_directory()
+                except Exception as exc:
+                    result["directory_error"] = str(exc)
+                _task_state["last_result"] = result
             except Exception as exc:
                 _task_state["last_error"] = str(exc)
             finally:
