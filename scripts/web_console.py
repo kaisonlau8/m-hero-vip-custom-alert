@@ -13,7 +13,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from flask import Flask, jsonify, redirect, render_template, request, url_for
+from flask import Flask, jsonify, redirect, render_template, request, send_from_directory, url_for
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PLUGIN_ROOT = SCRIPT_DIR.parent
@@ -93,9 +93,15 @@ app.jinja_env.globals["ds_css"] = lambda: _ds("antd-lite.css")
 app.jinja_env.globals["ds_sprite"] = lambda: _ds("sprite.svg")
 app.jinja_env.globals["ds_cards"] = lambda: _ds("cards.js")
 
+
+# --- 品牌静态资源（logo / favicon，design-system/sync.sh 同步到 ds/brand/）---
+@app.get("/ds/brand/<path:name>")
+def ds_brand(name: str):
+    return send_from_directory(str(PLUGIN_ROOT / "ds" / "brand"), name)
+
 # --- m-hero SSO (Casdoor): inert unless MHERO_AUTH[_VIP]=audit|on is set (see docs/SSO_CASDOOR.md) ---
 from mhero_auth.flask_adapter import init_app as _mhero_auth_init
-_mhero_auth_init(app, "vip", default_mode="off", public_paths=["/feishu/card"])
+_mhero_auth_init(app, "vip", default_mode="off", public_paths=["/feishu/card"], public_get_paths=["/ds/brand/*"])
 
 # Session paths honor DFMC_DMS_SESSION_HOME for cross-crawler sharing
 RUNTIME_DIR = get_runtime_dir(PLUGIN_ROOT)
