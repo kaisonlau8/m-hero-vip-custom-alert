@@ -12,6 +12,7 @@ PLUGIN_ROOT = SCRIPT_DIR.parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
 from bitable_sync import sync_all  # noqa: E402
+from directory_sync import sync_directory  # noqa: E402
 from pipeline import run_pipeline  # noqa: E402
 from time_utils import beijing_now, beijing_strftime, ensure_beijing_tz  # noqa: E402
 
@@ -20,7 +21,13 @@ ensure_beijing_tz()
 
 def run_midnight_bitable_sync() -> dict:
     print(f"[{beijing_strftime('%Y-%m-%d %H:%M:%S')}] 00:00 同步多维表")
-    return sync_all()
+    result = sync_all()
+    try:
+        result["directory"] = sync_directory()
+    except Exception as exc:
+        result["directory_error"] = str(exc)
+        print(f"[directory-sync] 失败: {exc}")
+    return result
 
 
 def run_morning_pipeline(

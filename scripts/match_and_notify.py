@@ -13,6 +13,7 @@ PLUGIN_ROOT = SCRIPT_DIR.parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
 from bitable_sync import load_recipients_list, load_vip_cache  # noqa: E402
+from directory_sync import load_national_recipients, national_level_matches  # noqa: E402
 from feishu_client import (  # noqa: E402
     build_vip_alert_card,
     resolve_phone_to_open_id,
@@ -289,6 +290,64 @@ def notify_matches(
                     {"name": rname, "role": role, "action": "failed"}
                 )
             time.sleep(0.35)
+
+        if need_send and send_attempts and not test_targets:
+            sent_ids = {
+                str(t.get("open_id") or "").strip()
+                for t in targets
+                if str(t.get("open_id") or "").strip()
+            }
+            for person in load_national_recipients():
+                rname = person.get("name") or "全国收件人"
+                vip_level = str(item.get("vip_level") or "").strip()
+                if not national_level_matches(person.get("levels"), vip_level):
+                    detail["recipients"].append(
+                        {
+                            "name": rname,
+                            "role": "national",
+                            "action": "skip_level",
+                            "vip_level": vip_level,
+                        }
+                    )
+                    print(f"[skip-level] {code} 全国抄送 {rname} 不收 {vip_level or '空级别'}")
+                    continue
+                oid = str(person.get("open_id") or "").strip()
+                phone = str(person.get("phone") or "").strip()
+                if not oid and phone and not dry_run:
+                    oid = resolve_phone_to_open_id(phone) or ""
+                if not oid or oid in sent_ids:
+                    if oid and oid in sent_ids:
+                        detail["recipients"].append(
+                            {"name": rname, "role": "national", "action": "skip_duplicate"}
+                        )
+                    continue
+                sent_ids.add(oid)
+                card = build_vip_alert_card(item, role="admin", tracking_record_id="")
+                send_attempts += 1
+                if dry_run:
+                    detail["recipients"].append(
+                        {"name": rname, "role": "national", "action": "dry_run", "has_button": False}
+                    )
+                    print(f"[dry-run] {code} 全国抄送 → {rname}")
+                    continue
+                resp = send_card_message(oid, card)
+                if resp:
+                    ok_any = True
+                    print(f"[sent] {code} 全国抄送 → {rname}")
+                    detail["recipients"].append(
+                        {
+                            "name": rname,
+                            "role": "national",
+                            "action": "sent",
+                            "message_id": resp.get("message_id") or "",
+                        }
+                    )
+                else:
+                    print(f"[fail] {code} 全国抄送 → {rname}")
+                    detail["recipients"].append(
+                        {"name": rname, "role": "national", "action": "failed"}
+                    )
+                time.sleep(0.35)
 
         if already_sent:
             detail["status"] = "skipped_sent_tracking_refreshed"

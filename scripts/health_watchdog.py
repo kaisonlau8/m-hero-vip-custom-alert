@@ -43,9 +43,23 @@ def _save_state(state: dict) -> None:
     STATE_PATH.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+def _service_token() -> str:
+    """SSO service token for the console's /api/vip/status (MHERO_AUTH). Env WATCHDOG_AUTH_TOKEN or a 600 file
+    (WATCHDOG_AUTH_TOKEN_FILE). Empty = send nothing (auth disabled / audit)."""
+    tok = (os.getenv("WATCHDOG_AUTH_TOKEN") or "").strip()
+    path = (os.getenv("WATCHDOG_AUTH_TOKEN_FILE") or "").strip()
+    if not tok and path:
+        try:
+            tok = open(path, encoding="utf-8").read().strip()
+        except OSError:
+            tok = ""
+    return tok
+
+
 def check_health(url: str, timeout: float = 8.0) -> tuple[bool, str]:
     try:
-        req = urllib.request.Request(url, method="GET")
+        headers = {"X-MHero-Token": _service_token()} if _service_token() else {}
+        req = urllib.request.Request(url, method="GET", headers=headers)
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             body = resp.read().decode("utf-8", errors="replace")
             if resp.status != 200:

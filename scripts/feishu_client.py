@@ -84,6 +84,18 @@ def _save_recipients_cache() -> None:
         )
 
 
+def cached_open_id(phone: str) -> str:
+    """只读本地缓存，不请求飞书。"""
+    phone = phone.lstrip("+").replace("-", "").replace(" ", "")
+    if phone.startswith("86") and len(phone) == 13:
+        phone = phone[2:]
+    if not phone:
+        return ""
+    if not _phone_to_open_id:
+        _load_recipients_cache()
+    return str(_phone_to_open_id.get(phone) or "")
+
+
 def resolve_phone_to_open_id(phone: str) -> str | None:
     phone = phone.lstrip("+").replace("-", "").replace(" ", "")
     if phone.startswith("86") and len(phone) == 13:
