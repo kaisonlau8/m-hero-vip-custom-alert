@@ -37,6 +37,22 @@ from dfmc_browser_utils import (
     refresh_block_reason,
 )
 
+try:
+    from dms_auto_login import ensure_logged_in
+except Exception as _exc:  # cv2 missing etc. -> keepalive keeps working without auto login
+    print(f"[WARN] auto login disabled: {_exc}")
+    ensure_logged_in = None
+
+
+def _maybe_auto_login(plugin_root: Path, cdp_port: int, reason: str) -> str:
+    if ensure_logged_in is None or not cdp_port:
+        return ""
+    try:
+        return ensure_logged_in(plugin_root, cdp_port, reason=reason)
+    except Exception as exc:
+        print(f"  [WARN] auto login error: {type(exc).__name__}: {str(exc)[:160]}")
+        return "auto_login:error"
+
 
 def _write_status(status_file: Path, payload: dict) -> None:
     status_file.parent.mkdir(parents=True, exist_ok=True)
@@ -114,6 +130,10 @@ def main() -> int:
         try:
             cdp_port = ensure_cdp_browser_running(state_file, plugin_root=plugin_root)
             last_result, block_reason = _refresh_dms(plugin_root, cdp_port)
+            if last_result == "need_login":
+                res = _maybe_auto_login(plugin_root, cdp_port, "origin-refresh")
+                if res:
+                    last_result = f"need_login->{res}"
         except Error as exc:
             print(f"[{cycle}] Playwright error: {exc}")
             last_result = f"error: {exc}"
@@ -144,7 +164,13 @@ def main() -> int:
             if time.monotonic() >= next_observe:
                 next_observe = time.monotonic() + 30
                 try:
-                    observe_dms_session(plugin_root, source="keepalive-poll")
+                    summary = observe_dms_session(plugin_root, source="keepalive-poll")
+                    cur = (summary or {}).get("current") or {}
+                    if cur.get("status") == "logged_out":
+                        port_now = cdp_port if "cdp_port" in locals() else 0
+                        res = _maybe_auto_login(plugin_root, port_now, "monitor:logged_out")
+                        if res:
+                            print(f"  auto login: {res}")
                 except Exception as exc:
                     print(f"  [WARN] session monitor: {exc}")
 
