@@ -21,6 +21,9 @@
     .ant-header .in { max-width: 1080px; }
     .container { max-width: 960px; }
     .vip-meta { margin-left: auto; font-size: var(--ant-font-size-table); color: var(--ant-color-text-tertiary); white-space: nowrap; }
+    /* 水平导航（桌面）：裸 nav，<=860px 由 cards.js 自动插入汉堡并加 .has-burger，
+       antd-lite.css 4.6 把它收成统一右侧抽屉（遮罩/Esc/链接关闭都在 cards.js 里）。
+       断点、动画曲线、抽屉宽度与层级全部来自设计系统，页面不再自带一套。 */
     .vip-nav { display: flex; gap: var(--ant-space-1); }
     .vip-nav a {
       display: inline-flex; align-items: center; gap: 4px; height: 36px; padding: 0 12px;
@@ -28,301 +31,22 @@
     }
     .vip-nav a:hover { background: rgba(0, 0, 0, .04); text-decoration: none; }
     .vip-nav a.cur { color: var(--ant-primary); font-weight: 600; background: var(--ant-primary-bg); }
-
-    /* 移动导航断点与 antd-lite 顶栏汉堡对齐：<=860px 抽屉，>=861px 保持横向导航。
-       进出场用 CSS transition（遮罩淡入淡出 + 面板 translateX），时长 0.3s，
-       缓动 cubic-bezier(0.215, 0.61, 0.355, 1)（Ant Design motionEaseOut）。
-       visibility 在退场结束后才隐藏，避免 display 切换吃掉退场动画。 */
-    .vip-burger { display: none; }
-    .vip-drawer { display: none; }
-
-    @media (max-width: 860px) {
-      .vip-nav { display: none; }
-      .vip-meta { display: none; }
-      /* 设计系统若仍插入 .burger / .has-burger，窄屏也不要再露出第二个菜单。 */
-      .ant-header[data-no-auto-burger] > .in > .burger,
-      .ant-header:has(#vip-burger) > .in > .burger {
-        display: none !important;
-      }
-      .ant-header[data-no-auto-burger].has-burger > .in > nav.vip-nav,
-      .ant-header:has(#vip-burger).has-burger > .in > nav.vip-nav {
-        display: none !important;
-        visibility: hidden !important;
-        pointer-events: none !important;
-        transform: none !important;
-      }
-      .vip-burger {
-        display: inline-flex;
-        position: relative;
-        margin-left: auto;
-        width: 44px;
-        height: 44px;
-        padding: 0;
-        flex: none;
-        align-items: center;
-        justify-content: center;
-        border: 1px solid var(--ant-color-border);
-        border-radius: var(--ant-radius-md);
-        background: #fff;
-        color: var(--ant-color-text);
-        cursor: pointer;
-      }
-      .vip-burger:hover,
-      .vip-burger[aria-expanded="true"] {
-        color: var(--ant-primary);
-        border-color: var(--ant-primary);
-        background: var(--ant-primary-bg);
-      }
-      .vip-burger-icon {
-        position: absolute;
-        left: 50%;
-        top: 50%;
-        width: 16px;
-        height: 16px;
-        font-size: 16px;
-        transition: opacity .2s ease, transform .2s ease;
-      }
-      .vip-burger-icon-menu { opacity: 1; transform: translate(-50%, -50%); }
-      .vip-burger-icon-close { opacity: 0; transform: translate(-50%, -50%) rotate(-90deg) scale(.6); }
-      .vip-burger[aria-expanded="true"] .vip-burger-icon-menu {
-        opacity: 0;
-        transform: translate(-50%, -50%) rotate(90deg) scale(.6);
-      }
-      .vip-burger[aria-expanded="true"] .vip-burger-icon-close {
-        opacity: 1;
-        transform: translate(-50%, -50%);
-      }
-
-      .vip-drawer { display: block; }
-      .vip-drawer-mask,
-      .vip-drawer-panel {
-        position: fixed;
-        visibility: hidden;
-        transition:
-          opacity .3s cubic-bezier(0.215, 0.61, 0.355, 1),
-          transform .3s cubic-bezier(0.215, 0.61, 0.355, 1),
-          visibility 0s linear .3s;
-      }
-      .vip-drawer-mask {
-        top: var(--ant-header-height);
-        left: 0;
-        right: 0;
-        bottom: 0;
-        z-index: 25;
-        background: rgba(0, 0, 0, .45);
-        opacity: 0;
-      }
-      .vip-drawer-panel {
-        top: var(--ant-header-height);
-        right: 0;
-        bottom: 0;
-        z-index: 26;
-        display: flex;
-        flex-direction: column;
-        width: min(300px, calc(100vw - 56px));
-        background: #fff;
-        color: var(--ant-color-text);
-        border-top: 2px solid var(--ant-primary);
-        border-left: 1px solid var(--ant-color-split);
-        box-shadow: var(--ant-shadow-dropdown);
-        transform: translateX(100%);
-        overscroll-behavior: contain;
-      }
-      .vip-drawer.is-open .vip-drawer-mask,
-      .vip-drawer.is-open .vip-drawer-panel {
-        visibility: visible;
-        transition:
-          opacity .3s cubic-bezier(0.215, 0.61, 0.355, 1),
-          transform .3s cubic-bezier(0.215, 0.61, 0.355, 1),
-          visibility 0s linear 0s;
-      }
-      .vip-drawer.is-open .vip-drawer-mask { opacity: 1; }
-      .vip-drawer.is-open .vip-drawer-panel { transform: translateX(0); }
-
-      .vip-drawer-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-        min-height: 56px;
-        padding: 8px 12px 8px 16px;
-        background: #fff;
-        border-bottom: 1px solid var(--ant-color-split);
-      }
-      .vip-drawer-head h2 {
-        margin: 0;
-        font-size: 16px;
-        font-weight: 600;
-        color: var(--ant-color-text);
-      }
-      .vip-drawer-close {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        min-height: 44px;
-        padding: 0 12px;
-        border: 1px solid var(--ant-color-border);
-        border-radius: var(--ant-radius-md);
-        background: #fff;
-        color: var(--ant-color-text);
-        font: inherit;
-        font-size: 14px;
-        cursor: pointer;
-      }
-      .vip-drawer-close:hover { color: var(--ant-primary); border-color: var(--ant-primary); }
-      .vip-drawer-nav {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        padding: 8px;
-      }
-      .vip-drawer-nav a {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        min-height: 44px;
-        padding: 0 12px;
-        border-radius: var(--ant-radius-md);
-        color: var(--ant-color-text);
-        font-size: 14px;
-      }
-      .vip-drawer-nav a:hover { background: rgba(0, 0, 0, .04); text-decoration: none; }
-      .vip-drawer-nav a.cur {
-        color: var(--ant-primary);
-        font-weight: 600;
-        background: var(--ant-primary-bg);
-      }
-      .vip-drawer-nav .ai { font-size: 16px; color: var(--ant-color-text-tertiary); }
-      .vip-drawer-nav a.cur .ai { color: var(--ant-primary); }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      .vip-burger-icon,
-      .vip-drawer-mask,
-      .vip-drawer-panel { transition: none; }
-    }
-    body.vip-nav-open { overflow: hidden; }
-    @media print {
-      .vip-burger, .vip-drawer { display: none !important; }
-    }
+    .vip-nav, .vip-meta { flex: none; }
   </style>
 </head>
 <body>
   {{ ds_sprite()|safe }}
-  <header class="ant-header" data-no-auto-burger><div class="in">
+  <header class="ant-header"><div class="in">
     <a class="brand" href="/"><img class="brand-logo" src="/ds/brand/logo-blue.png" srcset="/ds/brand/logo-blue@2x.png 2x" alt="猛士" height="28">VIP 保养提醒控制台</a>
     <nav class="vip-nav" aria-label="主导航">
       {{ vip_nav_links() }}
     </nav>
     <span class="vip-meta">端口 9002</span>
-    <button type="button" class="vip-burger" id="vip-burger" aria-expanded="false" aria-controls="vip-drawer" aria-label="打开菜单">
-      <svg class="ai vip-burger-icon vip-burger-icon-menu" aria-hidden="true"><use href="#i-menu"/></svg>
-      <svg class="ai vip-burger-icon vip-burger-icon-close" aria-hidden="true"><use href="#i-close"/></svg>
-    </button>
   </div></header>
-  <div class="vip-drawer" id="vip-drawer" aria-hidden="true" inert>
-    <div class="vip-drawer-mask" data-vip-drawer-close></div>
-    <div class="vip-drawer-panel" role="dialog" aria-modal="true" aria-labelledby="vip-drawer-title">
-      <div class="vip-drawer-head">
-        <h2 id="vip-drawer-title">菜单</h2>
-        <button type="button" class="vip-drawer-close" data-vip-drawer-close>
-          <svg class="ai" aria-hidden="true"><use href="#i-close"/></svg>关闭
-        </button>
-      </div>
-      <nav class="vip-drawer-nav" aria-label="移动导航">
-        {{ vip_nav_links() }}
-      </nav>
-    </div>
-  </div>
   <div class="container">
     {% block content %}{% endblock %}
   </div>
   <footer class="ant-page-footer" style="text-align:center">猛士科技 服务运营 — VIP 客户保养提醒</footer>
   <script>{{ ds_cards()|safe }}</script>
-  <script>
-    (function () {
-      var root = document.getElementById('vip-drawer');
-      var btn = document.getElementById('vip-burger');
-      if (!root || !btn) return;
-      var panel = root.querySelector('.vip-drawer-panel');
-      var mq = window.matchMedia('(max-width: 860px)');
-      var reduceMq = window.matchMedia('(prefers-reduced-motion: reduce)');
-      var lastFocus = null;
-      var closeTimer = 0;
-
-      function finishClose() {
-        if (root.classList.contains('is-open')) return;
-        root.setAttribute('aria-hidden', 'true');
-        root.setAttribute('inert', '');
-      }
-
-      function setOpen(open) {
-        var wasOpen = root.classList.contains('is-open');
-        if (open === wasOpen) return;
-        if (open && !mq.matches) return;
-        window.clearTimeout(closeTimer);
-        if (open) {
-          lastFocus = document.activeElement;
-          root.removeAttribute('inert');
-          root.setAttribute('aria-hidden', 'false');
-          root.classList.add('is-open');
-          btn.setAttribute('aria-expanded', 'true');
-          btn.setAttribute('aria-label', '关闭菜单');
-          document.body.classList.add('vip-nav-open');
-          var closeBtn = root.querySelector('.vip-drawer-close');
-          if (closeBtn) closeBtn.focus();
-          return;
-        }
-        root.classList.remove('is-open');
-        btn.setAttribute('aria-expanded', 'false');
-        btn.setAttribute('aria-label', '打开菜单');
-        document.body.classList.remove('vip-nav-open');
-        if (lastFocus && typeof lastFocus.focus === 'function') lastFocus.focus();
-        lastFocus = null;
-        if (!panel || reduceMq.matches) {
-          finishClose();
-          return;
-        }
-        panel.addEventListener('transitionend', function onEnd(ev) {
-          if (ev.target !== panel || ev.propertyName !== 'transform') return;
-          panel.removeEventListener('transitionend', onEnd);
-          finishClose();
-        });
-        closeTimer = window.setTimeout(finishClose, 400);
-      }
-
-      btn.addEventListener('click', function () {
-        setOpen(btn.getAttribute('aria-expanded') !== 'true');
-      });
-      root.addEventListener('click', function (ev) {
-        if (ev.target.closest('[data-vip-drawer-close], .vip-drawer-nav a')) setOpen(false);
-      });
-      document.addEventListener('keydown', function (ev) {
-        if (!root.classList.contains('is-open')) return;
-        if (ev.key === 'Escape') {
-          ev.preventDefault();
-          setOpen(false);
-          return;
-        }
-        if (ev.key !== 'Tab') return;
-        var items = root.querySelectorAll('a, button');
-        if (!items.length) return;
-        var first = items[0];
-        var last = items[items.length - 1];
-        if (ev.shiftKey && document.activeElement === first) {
-          ev.preventDefault();
-          last.focus();
-        } else if (!ev.shiftKey && document.activeElement === last) {
-          ev.preventDefault();
-          first.focus();
-        }
-      });
-      function onViewportChange() {
-        if (!mq.matches) setOpen(false);
-      }
-      if (mq.addEventListener) mq.addEventListener('change', onViewportChange);
-      else if (mq.addListener) mq.addListener(onViewportChange);
-    })();
-  </script>
 </body>
 </html>
