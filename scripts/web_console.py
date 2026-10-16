@@ -92,6 +92,8 @@ def _ds(name: str) -> str:
 app.jinja_env.globals["ds_css"] = lambda: _ds("antd-lite.css")
 app.jinja_env.globals["ds_sprite"] = lambda: _ds("sprite.svg")
 app.jinja_env.globals["ds_cards"] = lambda: _ds("cards.js")
+app.jinja_env.globals["ds_feedback_css"] = lambda: _ds("feedback.css")
+app.jinja_env.globals["ds_feedback"] = lambda: _ds("feedback.js")
 
 
 # --- 品牌静态资源（logo / favicon，design-system/sync.sh 同步到 ds/brand/）---
@@ -720,6 +722,7 @@ def contacts_national_add():
         current = [item for item in load_national_recipients() if item.get("name") != name and item.get("phone") != phone]
         current.append({"name": name, "phone": phone, "open_id": "", "levels": levels})
         save_national_recipients(current)
+        return redirect(url_for("contacts_page", sync_ok="1", sync_msg="已保存全国收件人"))
     return redirect(url_for("contacts_page"))
 
 
@@ -734,7 +737,7 @@ def contacts_national_delete():
         if not (item.get("name") == name and item.get("phone") == phone)
     ]
     save_national_recipients(kept)
-    return redirect(url_for("contacts_page"))
+    return redirect(url_for("contacts_page", sync_ok="1", sync_msg="已删除全国收件人"))
 
 
 @app.route("/api/status")

@@ -1,0 +1,262 @@
+/* feedback.css — Ant Design v5 交互反馈（Button loading / Spin / Message / Notification）
+   只使用 antd-lite 已有 token，不改主题色。动效是组件自带的旋转与进出场，
+   不引入第三方动画库。本控制台没有文件上传，因此这里不放 Upload / Progress。 */
+
+.ant-btn.ant-btn-loading { pointer-events: none; }
+.ant-btn-loading-icon {
+  display: inline-flex;
+  align-items: center;
+  line-height: 0;
+}
+.ant-btn-loading > .ai { display: none; }
+.ant-btn-loading > .ant-btn-loading-icon .ai { display: inline-block; }
+
+.anticon-spin {
+  animation: antLoadingCircle 1s infinite linear;
+  transform-origin: center;
+}
+
+@keyframes antLoadingCircle {
+  100% { transform: rotate(360deg); }
+}
+
+/* loading 时保持按钮原色，只降低透明度（antd 默认），不要变成禁用灰 */
+.ant-btn.ant-btn-loading[disabled] {
+  cursor: default;
+  pointer-events: none;
+  opacity: 0.65;
+}
+.ant-btn.ant-btn-primary.ant-btn-loading[disabled] {
+  color: #fff;
+  background: var(--ant-primary);
+  border-color: var(--ant-primary);
+}
+.ant-btn.ant-btn-danger.ant-btn-loading[disabled] {
+  color: #cf1322;
+  background: var(--ant-color-bg-container);
+  border-color: var(--ant-error);
+}
+.ant-btn.ant-btn-loading[disabled]:not(.ant-btn-primary):not(.ant-btn-danger) {
+  color: var(--ant-color-text);
+  background: var(--ant-color-bg-container);
+  border-color: var(--ant-color-border);
+}
+
+/* ---- Spin：四圆点，主色 #1677ff ---- */
+.ant-spin {
+  display: inline-block;
+  color: var(--ant-primary);
+  line-height: 1;
+  vertical-align: middle;
+  text-align: center;
+}
+.ant-spin-dot {
+  position: relative;
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  font-size: 20px;
+}
+.ant-spin-dot-item {
+  position: absolute;
+  display: block;
+  width: 9px;
+  height: 9px;
+  background: var(--ant-primary);
+  border-radius: 50%;
+  transform: scale(0.75);
+  transform-origin: 50% 50%;
+  opacity: 0.3;
+  animation: antSpinMove 1s infinite linear alternate;
+}
+.ant-spin-dot-item:nth-child(1) { top: 0; left: 0; }
+.ant-spin-dot-item:nth-child(2) { top: 0; right: 0; animation-delay: 0.4s; }
+.ant-spin-dot-item:nth-child(3) { right: 0; bottom: 0; animation-delay: 0.8s; }
+.ant-spin-dot-item:nth-child(4) { bottom: 0; left: 0; animation-delay: 1.2s; }
+
+.ant-spin-sm .ant-spin-dot { width: 14px; height: 14px; font-size: 14px; }
+.ant-spin-sm .ant-spin-dot-item { width: 6px; height: 6px; }
+.ant-spin-lg .ant-spin-dot { width: 32px; height: 32px; font-size: 32px; }
+.ant-spin-lg .ant-spin-dot-item { width: 14px; height: 14px; }
+
+@keyframes antSpinMove {
+  to { opacity: 1; }
+}
+
+[data-af-placeholder-spin] > .ant-spin { margin-right: 8px; }
+
+.ant-spin-nested-loading { position: relative; }
+.ant-spin-text {
+  margin-top: 8px;
+  font-size: var(--ant-font-size-base);
+  color: var(--ant-primary);
+  text-shadow: 0 1px 2px #fff;
+}
+.ant-spin-nested-loading > .ant-spin {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.ant-spin-nested-loading.is-spinning { min-height: 96px; }
+.ant-spin-nested-loading.is-spinning > .ant-spin { display: flex; }
+.ant-spin-nested-loading.is-spinning > .ant-spin-container {
+  opacity: 0.5;
+  user-select: none;
+  pointer-events: none;
+}
+.ant-spin-container { transition: opacity 0.3s; }
+
+/* ---- Message：顶部居中白底轻提示 ---- */
+.ant-message {
+  position: fixed;
+  top: 8px;
+  left: 0;
+  right: 0;
+  z-index: 2010;
+  pointer-events: none;
+  text-align: center;
+}
+.ant-message-notice {
+  padding: 8px;
+  animation: antMessageMoveIn 0.2s ease-out;
+}
+.ant-message-notice-leave {
+  animation: antMessageMoveOut 0.2s ease-in forwards;
+}
+.ant-message-notice-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(520px, calc(100vw - 32px));
+  padding: 9px 12px;
+  background: #fff;
+  border-radius: var(--ant-radius-lg);
+  box-shadow: var(--ant-shadow-dropdown);
+  font-size: var(--ant-font-size-base);
+  line-height: 1.5714;
+  color: var(--ant-color-text);
+  text-align: left;
+  pointer-events: all;
+}
+.ant-message-icon { display: inline-flex; font-size: 16px; line-height: 0; }
+.ant-message-icon .ai { width: 16px; height: 16px; }
+.ant-message-success .ant-message-icon { color: var(--ant-success); }
+.ant-message-error .ant-message-icon { color: var(--ant-error); }
+.ant-message-warning .ant-message-icon { color: var(--ant-warning); }
+.ant-message-info .ant-message-icon,
+.ant-message-loading .ant-message-icon { color: var(--ant-primary); }
+.ant-message-text { min-width: 0; }
+
+@keyframes antMessageMoveIn {
+  0% { transform: translateY(-100%); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+@keyframes antMessageMoveOut {
+  0% { opacity: 1; max-height: 150px; }
+  100% { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; }
+}
+
+/* ---- Notification：右上角白底通知 ---- */
+.ant-notification {
+  position: fixed;
+  top: 24px;
+  right: 0;
+  z-index: 1050;
+  width: 384px;
+  max-width: calc(100vw - 32px);
+  margin-right: 24px;
+  pointer-events: none;
+}
+.ant-notification-notice {
+  position: relative;
+  margin-bottom: 16px;
+  padding: 16px 36px 16px 24px;
+  background: #fff;
+  border-radius: var(--ant-radius-lg);
+  box-shadow: var(--ant-shadow-dropdown);
+  line-height: 1.5714;
+  pointer-events: all;
+  animation: antNotificationFadeIn 0.2s ease-out;
+}
+.ant-notification-notice-leave {
+  animation: antNotificationFadeOut 0.2s ease-in forwards;
+}
+.ant-notification-notice-icon {
+  position: absolute;
+  top: 16px;
+  left: 24px;
+  font-size: 24px;
+  line-height: 0;
+}
+.ant-notification-notice-icon .ai { width: 24px; height: 24px; }
+.ant-notification-notice-success .ant-notification-notice-icon { color: var(--ant-success); }
+.ant-notification-notice-error .ant-notification-notice-icon { color: var(--ant-error); }
+.ant-notification-notice-warning .ant-notification-notice-icon { color: var(--ant-warning); }
+.ant-notification-notice-info .ant-notification-notice-icon { color: var(--ant-primary); }
+.ant-notification-notice-message {
+  margin-left: 36px;
+  font-size: var(--ant-font-size-card-title);
+  font-weight: 600;
+  color: var(--ant-color-text);
+}
+.ant-notification-notice-description {
+  margin-top: 4px;
+  margin-left: 36px;
+  font-size: var(--ant-font-size-base);
+  color: var(--ant-color-text-secondary);
+}
+.ant-notification-notice-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ant-color-text-tertiary);
+  cursor: pointer;
+  border-radius: var(--ant-radius-sm);
+}
+.ant-notification-notice-close:hover { color: var(--ant-color-text); background: rgba(0, 0, 0, .04); }
+
+@keyframes antNotificationFadeIn {
+  0% { opacity: 0; transform: translateX(100%); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+@keyframes antNotificationFadeOut {
+  0% { opacity: 1; max-height: 200px; margin-bottom: 16px; }
+  100% { opacity: 0; max-height: 0; margin-bottom: 0; padding-top: 0; padding-bottom: 0; }
+}
+
+@media (max-width: 768px) {
+  .ant-notification {
+    top: 16px;
+    right: 0;
+    left: 0;
+    width: auto;
+    margin: 0 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anticon-spin,
+  .ant-spin-dot-item,
+  .ant-message-notice,
+  .ant-message-notice-leave,
+  .ant-notification-notice,
+  .ant-notification-notice-leave,
+  .ant-spin-container {
+    animation: none;
+    transition: none;
+  }
+  .ant-spin-dot-item { opacity: 1; }
+}
