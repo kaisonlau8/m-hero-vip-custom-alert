@@ -34,11 +34,11 @@
     <div class="label">浏览器录制</div>
   </div>
   <div class="stat">
-    <div class="num" id="vip-count">—</div>
+    <div class="num" id="vip-count" data-af-placeholder-spin="sm"></div>
     <div class="label">VIP 缓存人数</div>
   </div>
   <div class="stat">
-    <div class="num" id="sent-count">—</div>
+    <div class="num" id="sent-count" data-af-placeholder-spin="sm"></div>
     <div class="label">已提醒任务数</div>
   </div>
 </div>
@@ -48,14 +48,14 @@
   <div class="ant-card-body">
   <p class="muted">每日 0 点同步多维表，每日 9 点爬取保养提醒并按 VIN 匹配后发飞书卡片（同一任务编码只提醒一次）。</p>
   <div class="ant-flex">
-    <button class="ant-btn" onclick="vipSync()"><svg class="ai" aria-hidden="true"><use href="#i-reload"/></svg>同步多维表</button>
-    <button class="ant-btn" onclick="vipCrawl()"><svg class="ai" aria-hidden="true"><use href="#i-cloud-download"/></svg>仅爬取 DMS</button>
-    <button class="ant-btn ant-btn-primary" onclick="vipPipeline(false)"><svg class="ai" aria-hidden="true"><use href="#i-play-circle"/></svg>爬取+匹配发送</button>
-    <button class="ant-btn" onclick="vipPipeline(true)">用最新 Excel dry-run</button>
-    <button class="ant-btn" id="btn-sched-start" onclick="schedStart()"><svg class="ai" aria-hidden="true"><use href="#i-clock-circle"/></svg>启动定时等候</button>
-    <button class="ant-btn" id="btn-sched-stop" onclick="schedStop()"><svg class="ai" aria-hidden="true"><use href="#i-stop"/></svg>停止定时</button>
+    <button class="ant-btn" id="btn-vip-sync" type="button" onclick="vipSync(this)"><svg class="ai" aria-hidden="true"><use href="#i-reload"/></svg>同步多维表</button>
+    <button class="ant-btn" id="btn-vip-crawl" type="button" onclick="vipCrawl(this)"><svg class="ai" aria-hidden="true"><use href="#i-cloud-download"/></svg>仅爬取 DMS</button>
+    <button class="ant-btn ant-btn-primary" id="btn-vip-pipeline" type="button" onclick="vipPipeline(false, this)"><svg class="ai" aria-hidden="true"><use href="#i-play-circle"/></svg>爬取+匹配发送</button>
+    <button class="ant-btn" id="btn-vip-dry" type="button" onclick="vipPipeline(true, this)">用最新 Excel dry-run</button>
+    <button class="ant-btn" id="btn-sched-start" type="button" onclick="schedStart(this)"><svg class="ai" aria-hidden="true"><use href="#i-clock-circle"/></svg>启动定时等候</button>
+    <button class="ant-btn" id="btn-sched-stop" type="button" onclick="schedStop(this)"><svg class="ai" aria-hidden="true"><use href="#i-stop"/></svg>停止定时</button>
   </div>
-  <p class="muted ant-mt-2" id="vip-detail">加载中…</p>
+  <p class="muted ant-mt-2" id="vip-detail" data-af-placeholder-spin="sm">加载中…</p>
   </div>
 </div>
 
@@ -87,9 +87,9 @@
       {% endif %}
       {% endfor %}
     </select>
-    <button onclick="launchBrowser()" class="ant-btn ant-btn-primary"><svg class="ai" aria-hidden="true"><use href="#i-play-circle"/></svg>启动登录</button>
+    <button type="button" onclick="launchBrowser(this)" class="ant-btn ant-btn-primary"><svg class="ai" aria-hidden="true"><use href="#i-play-circle"/></svg>启动登录</button>
     {% if browser %}
-    <button onclick="disconnectBrowser()" class="ant-btn">断开连接</button>
+    <button type="button" onclick="disconnectBrowser(this)" class="ant-btn">断开连接</button>
     {% endif %}
   </div>
   <p class="muted" id="browser-hint">
@@ -107,8 +107,12 @@
     　今日退出：<strong id="session-monitor-count">0</strong>
     　最近变化：<span id="session-monitor-changed" class="muted">—</span>
   </p>
-  <div class="tw ant-table-wrap"><table><thead><tr><th data-card-title>时间</th><th>状态</th><th>来源</th><th>页面</th><th>依据</th></tr></thead>
-    <tbody id="session-monitor-events"><tr><td colspan="5" class="muted">加载中…</td></tr></tbody></table></div>
+  <div id="session-monitor-spin-host" class="ant-spin-nested-loading is-spinning">
+    <div class="ant-spin-container">
+      <div class="tw ant-table-wrap"><table><thead><tr><th data-card-title>时间</th><th>状态</th><th>来源</th><th>页面</th><th>依据</th></tr></thead>
+        <tbody id="session-monitor-events"><tr><td colspan="5" class="muted">加载中…</td></tr></tbody></table></div>
+    </div>
+  </div>
   </div>
 </div>
 
@@ -118,8 +122,8 @@
   <p class="muted">录制保养提醒页操作（导航→查询→导出），输出到 <code>recordings/</code>，用于完善爬虫选择器。</p>
   <div class="ant-flex">
     <input class="ant-input" id="recorder-name" type="text" placeholder="会话名（如 maintenance-reminder）" style="min-width:220px" value="maintenance-reminder">
-    <button id="btn-recorder-start" onclick="startRecorder()" class="ant-btn ant-btn-primary" {% if not browser_ok %}disabled{% endif %}><svg class="ai" aria-hidden="true"><use href="#i-play-circle"/></svg>开始录制</button>
-    <button id="btn-recorder-stop" onclick="stopRecorder()" class="ant-btn ant-btn-danger" {% if not recorder_info.running %}disabled{% endif %}><svg class="ai" aria-hidden="true"><use href="#i-stop"/></svg>停止录制</button>
+    <button id="btn-recorder-start" type="button" onclick="startRecorder(this)" class="ant-btn ant-btn-primary" {% if not browser_ok %}disabled{% endif %}><svg class="ai" aria-hidden="true"><use href="#i-play-circle"/></svg>开始录制</button>
+    <button id="btn-recorder-stop" type="button" onclick="stopRecorder(this)" class="ant-btn ant-btn-danger" {% if not recorder_info.running %}disabled{% endif %}><svg class="ai" aria-hidden="true"><use href="#i-stop"/></svg>停止录制</button>
   </div>
   <p class="muted ant-mt-2" id="recorder-detail">
     {% if recorder_info.running %}正在录制：PID {{ recorder_info.pid }}{% else %}未在录制。{% endif %}
@@ -201,27 +205,73 @@ function renderRecorder(d) {
       ? ('正在录制：PID ' + rec.pid + (rec.session_dir ? ' · <code>' + rec.session_dir + '</code>' : ''))
       : '未在录制。';
   }
-  if (startBtn) startBtn.disabled = !d.browser_ok || !!rec.running;
-  if (stopBtn) stopBtn.disabled = !rec.running;
+  if (startBtn && !startBtn.classList.contains('ant-btn-loading')) startBtn.disabled = !d.browser_ok || !!rec.running;
+  if (stopBtn && !stopBtn.classList.contains('ant-btn-loading')) stopBtn.disabled = !rec.running;
+}
+
+var VIP_ACTION_IDS = ['btn-vip-sync', 'btn-vip-crawl', 'btn-vip-pipeline', 'btn-vip-dry'];
+var vipActionPending = false;
+var dashboardLoaded = false;
+var vipLoaded = false;
+var loadErrorShown = false;
+
+function setCount(id, value) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.setAttribute('data-af-spin-done', '1');
+  el.textContent = value;
+}
+
+function setVipDetail(text, busy) {
+  var detail = document.getElementById('vip-detail');
+  if (!detail) return;
+  detail.setAttribute('data-af-spin-done', '1');
+  detail.replaceChildren();
+  if (busy) {
+    detail.appendChild(AntFeedback.createSpin('sm'));
+    detail.appendChild(document.createTextNode(' '));
+  }
+  detail.appendChild(document.createTextNode(text || ''));
+}
+
+function setVipActionsLocked(locked) {
+  VIP_ACTION_IDS.forEach(function (id) {
+    var el = document.getElementById(id);
+    if (!el || el.classList.contains('ant-btn-loading')) return;
+    el.disabled = !!locked;
+  });
+}
+
+function noteLoadError() {
+  if (loadErrorShown) return;
+  loadErrorShown = true;
+  AntFeedback.message.error('页面状态加载失败');
 }
 
 function refreshVipStatus() {
-  fetch('/api/vip/status').then(r => r.json()).then(d => {
-    var vipEl = document.getElementById('vip-count');
-    var sentEl = document.getElementById('sent-count');
-    var detail = document.getElementById('vip-detail');
-    if (vipEl) vipEl.textContent = d.vip_count;
-    if (sentEl) sentEl.textContent = d.sent_count;
-    if (detail) {
-      var parts = [];
-      parts.push(d.task_running ? '任务执行中…' : '空闲');
-      parts.push(d.scheduler_running ? '定时等候中' : '定时未启动');
-      if (d.latest_download) parts.push('最新文件 ' + d.latest_download);
-      if (d.sync_state && d.sync_state.synced_at) parts.push('上次同步 ' + d.sync_state.synced_at);
-      if (d.last_error) parts.push('错误: ' + d.last_error);
-      detail.textContent = parts.join(' · ');
+  return fetch('/api/vip/status').then(function (r) { return r.json(); }).then(function (d) {
+    vipLoaded = true;
+    setCount('vip-count', d.vip_count);
+    setCount('sent-count', d.sent_count);
+    var parts = [];
+    parts.push(d.task_running ? '任务执行中…' : '空闲');
+    parts.push(d.scheduler_running ? '定时等候中' : '定时未启动');
+    if (d.latest_download) parts.push('最新文件 ' + d.latest_download);
+    if (d.sync_state && d.sync_state.synced_at) parts.push('上次同步 ' + d.sync_state.synced_at);
+    if (d.last_error) parts.push('错误: ' + d.last_error);
+    setVipDetail(parts.join(' · '), !!d.task_running);
+    if (!vipActionPending) setVipActionsLocked(!!d.task_running);
+    return d;
+  }).catch(function () {
+    if (!vipLoaded) {
+      noteLoadError();
+      setCount('vip-count', '—');
+      setCount('sent-count', '—');
+      setVipDetail('状态加载失败', false);
+      setVipActionsLocked(false);
     }
-  }).catch(function () {});
+    return null;
+  });
 }
 
 function renderSessionMonitor(m) {
@@ -244,10 +294,12 @@ function renderSessionMonitor(m) {
       return '<tr><td>' + (e.at || '') + '</td><td>' + (labels[e.status] || e.status) + '</td><td>' + (e.source || '') + '</td><td title="' + (e.url || '') + '">' + page + '</td><td>' + marks + '</td></tr>';
     }).join('') : '<tr><td colspan="5" class="muted">尚无记录</td></tr>';
   }
+  AntFeedback.setNestedSpin(document.getElementById('session-monitor-spin-host'), false);
 }
 
 function refreshDashboardStatus() {
   fetch('/api/status').then(r => r.json()).then(d => {
+    dashboardLoaded = true;
     keepaliveRunning = !!(d.keepalive_info && d.keepalive_info.running);
     keepaliveNextRefreshEpoch = d.keepalive_info ? (d.keepalive_info.next_refresh_at_epoch || 0) : 0;
     keepaliveNeedLogin = !!(d.keepalive_info && d.keepalive_info.need_login);
@@ -288,83 +340,151 @@ function refreshDashboardStatus() {
         hint.textContent = '浏览器在线，可录制/爬取。';
       }
     }
-  }).catch(function () {});
+  }).catch(function () {
+    if (!dashboardLoaded) {
+      noteLoadError();
+      AntFeedback.setNestedSpin(document.getElementById('session-monitor-spin-host'), false);
+      var table = document.getElementById('session-monitor-events');
+      if (table) table.innerHTML = '<tr><td colspan="5" class="muted">状态加载失败</td></tr>';
+    }
+  });
   refreshVipStatus();
 }
 
-function launchBrowser() {
+function readJson(r) {
+  return r.json().then(function (d) { return { ok: r.ok, d: d || {} }; });
+}
+
+function launchBrowser(btn) {
   var browser = document.getElementById('browser-select').value;
+  AntFeedback.setButtonLoading(btn, true);
   fetch('/api/browser/launch', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({browser: browser})
-  }).then(r => r.json()).then(d => {
-    if (d.launched) { alert(d.message); location.reload(); }
-    else alert('启动失败: ' + (d.error || '未知错误'));
+  }).then(readJson).then(function (res) {
+    if (res.ok && res.d.launched) {
+      AntFeedback.flash('success', res.d.message || '浏览器已启动');
+      location.reload();
+      return;
+    }
+    AntFeedback.setButtonLoading(btn, false);
+    AntFeedback.notification.error({ title: '启动失败', description: res.d.error || res.d.message || '未知错误' });
+  }).catch(function () {
+    AntFeedback.setButtonLoading(btn, false);
+    AntFeedback.notification.error({ title: '启动失败', description: '网络异常，请稍后重试。' });
   });
 }
 
-function disconnectBrowser() {
+function disconnectBrowser(btn) {
   if (!confirm('确认断开浏览器连接？')) return;
-  fetch('/api/browser/disconnect', {method: 'POST'}).then(() => location.reload());
+  AntFeedback.setButtonLoading(btn, true);
+  fetch('/api/browser/disconnect', {method: 'POST'}).then(function (r) {
+    if (!r.ok) throw new Error('disconnect failed');
+    AntFeedback.flash('success', '已断开浏览器连接');
+    location.reload();
+  }).catch(function () {
+    AntFeedback.setButtonLoading(btn, false);
+    AntFeedback.notification.error({ title: '断开失败', description: '请稍后重试。' });
+  });
 }
 
-function startRecorder() {
+function startRecorder(btn) {
   var name = (document.getElementById('recorder-name').value || '').trim();
+  AntFeedback.setButtonLoading(btn, true);
   fetch('/api/recorder/start', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({session_name: name})
-  }).then(r => r.json().then(d => ({ok: r.ok, d}))).then(function (res) {
-    if (res.ok && res.d.started) { alert(res.d.message); location.reload(); }
-    else alert('无法开始录制: ' + (res.d.error || '未知错误'));
+  }).then(readJson).then(function (res) {
+    if (res.ok && res.d.started) {
+      AntFeedback.flash('success', res.d.message || '已开始录制');
+      location.reload();
+      return;
+    }
+    AntFeedback.setButtonLoading(btn, false);
+    AntFeedback.notification.error({ title: '无法开始录制', description: res.d.error || '未知错误' });
+  }).catch(function () {
+    AntFeedback.setButtonLoading(btn, false);
+    AntFeedback.notification.error({ title: '无法开始录制', description: '网络异常，请稍后重试。' });
   });
 }
 
-function stopRecorder() {
+function stopRecorder(btn) {
   if (!confirm('确认停止录制？')) return;
-  fetch('/api/recorder/stop', {method: 'POST'}).then(r => r.json()).then(d => {
-    alert(d.message || '已停止'); location.reload();
+  AntFeedback.setButtonLoading(btn, true);
+  fetch('/api/recorder/stop', {method: 'POST'}).then(readJson).then(function (res) {
+    AntFeedback.flash(res.ok ? 'success' : 'error', res.d.message || res.d.error || '已停止');
+    location.reload();
+  }).catch(function () {
+    AntFeedback.setButtonLoading(btn, false);
+    AntFeedback.notification.error({ title: '停止录制失败', description: '网络异常，请稍后重试。' });
   });
 }
 
-function vipSync() {
-  fetch('/api/vip/sync', {method: 'POST'}).then(r => r.json()).then(d => {
-    alert(d.message || d.error || JSON.stringify(d));
-    setTimeout(refreshVipStatus, 1500);
-  });
-}
-
-function vipCrawl() {
-  fetch('/api/vip/crawl', {method: 'POST'}).then(r => r.json()).then(d => {
-    alert(d.message || d.error || JSON.stringify(d));
-    setTimeout(refreshVipStatus, 2000);
-  });
-}
-
-function vipPipeline(dryRun) {
-  fetch('/api/vip/pipeline', {
+function vipPost(btn, url, body) {
+  if (vipActionPending || (btn && btn.classList.contains('ant-btn-loading'))) return;
+  vipActionPending = true;
+  AntFeedback.setButtonLoading(btn, true);
+  setVipActionsLocked(true);
+  fetch(url, {
     method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({skip_crawl: !!dryRun, dry_run: !!dryRun})
-  }).then(r => r.json()).then(d => {
-    alert(d.message || d.error || JSON.stringify(d));
-    setTimeout(refreshVipStatus, 2000);
+    headers: body ? {'Content-Type': 'application/json'} : undefined,
+    body: body ? JSON.stringify(body) : undefined
+  }).then(readJson).then(function (res) {
+    var d = res.d;
+    if (res.ok && d.ok !== false && !d.error) {
+      AntFeedback.notification.success({
+        title: d.message || '已开始',
+        description: '任务在后台执行，页面状态会自动刷新。'
+      });
+    } else {
+      AntFeedback.notification.warning({
+        title: '未能开始',
+        description: d.error || d.message || '请稍后重试。'
+      });
+    }
+  }).catch(function () {
+    AntFeedback.notification.error({ title: '请求失败', description: '网络异常，请稍后重试。' });
+  }).finally(function () {
+    vipActionPending = false;
+    AntFeedback.setButtonLoading(btn, false);
+    setVipActionsLocked(true);
+    refreshVipStatus();
   });
 }
 
-function schedStart() {
-  fetch('/api/vip/scheduler/start', {method: 'POST'}).then(r => r.json()).then(d => {
-    alert(d.message || d.error); refreshVipStatus();
+function vipSync(btn) {
+  vipPost(btn, '/api/vip/sync');
+}
+
+function vipCrawl(btn) {
+  vipPost(btn, '/api/vip/crawl');
+}
+
+function vipPipeline(dryRun, btn) {
+  vipPost(btn, '/api/vip/pipeline', {skip_crawl: !!dryRun, dry_run: !!dryRun});
+}
+
+function schedCall(btn, url) {
+  if (btn && btn.classList.contains('ant-btn-loading')) return;
+  AntFeedback.setButtonLoading(btn, true);
+  fetch(url, {method: 'POST'}).then(readJson).then(function (res) {
+    var text = res.d.message || res.d.error || '';
+    if (res.ok && !res.d.error) AntFeedback.message.success(text || '已更新定时');
+    else AntFeedback.message.error(text || '定时操作失败');
+    refreshVipStatus();
+  }).catch(function () {
+    AntFeedback.message.error('网络异常，请稍后重试');
+  }).finally(function () {
+    AntFeedback.setButtonLoading(btn, false);
   });
 }
 
-function schedStop() {
-  fetch('/api/vip/scheduler/stop', {method: 'POST'}).then(r => r.json()).then(d => {
-    alert(d.message || d.error); refreshVipStatus();
-  });
-}
+function schedStart(btn) { schedCall(btn, '/api/vip/scheduler/start'); }
+function schedStop(btn) { schedCall(btn, '/api/vip/scheduler/stop'); }
 
+AntFeedback.mount(document);
 renderKeepaliveStatus();
 refreshDashboardStatus();
 setInterval(renderKeepaliveStatus, 1000);
