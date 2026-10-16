@@ -39,6 +39,18 @@
     @media (max-width: 860px) {
       .vip-nav { display: none; }
       .vip-meta { display: none; }
+      /* 设计系统若仍插入 .burger / .has-burger，窄屏也不要再露出第二个菜单。 */
+      .ant-header[data-no-auto-burger] > .in > .burger,
+      .ant-header:has(#vip-burger) > .in > .burger {
+        display: none !important;
+      }
+      .ant-header[data-no-auto-burger].has-burger > .in > nav.vip-nav,
+      .ant-header:has(#vip-burger).has-burger > .in > nav.vip-nav {
+        display: none !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+        transform: none !important;
+      }
       .vip-burger {
         display: inline-flex;
         position: relative;
@@ -197,7 +209,7 @@
 </head>
 <body>
   {{ ds_sprite()|safe }}
-  <header class="ant-header"><div class="in">
+  <header class="ant-header" data-no-auto-burger><div class="in">
     <a class="brand" href="/"><img class="brand-logo" src="/ds/brand/logo-blue.png" srcset="/ds/brand/logo-blue@2x.png 2x" alt="猛士" height="28">VIP 保养提醒控制台</a>
     <nav class="vip-nav" aria-label="主导航">
       {{ vip_nav_links() }}

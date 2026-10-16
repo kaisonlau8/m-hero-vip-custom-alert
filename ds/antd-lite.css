@@ -394,6 +394,13 @@ h1, h2, h3, h4, h5, h6 { font-weight: 600; line-height: 1.4; }
     margin-left: 0;
     margin-right: auto;
   }
+  /* VIP 自己的 #vip-burger 已负责开关。两者同时存在时只留页面按钮。 */
+  .ant-header:has(#vip-burger) > .in > .burger,
+  .topbar:has(#vip-burger) > .in > .burger,
+  .ant-header[data-no-auto-burger] > .in > .burger,
+  .topbar[data-no-auto-burger] > .in > .burger {
+    display: none !important;
+  }
   .burger .ai { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; }
   .burger::before, .burger::after {
     content: "";
@@ -497,7 +504,8 @@ h1, h2, h3, h4, h5, h6 { font-weight: 600; line-height: 1.4; }
   }
   .mi.right { border-top: 1px solid var(--ant-color-split); margin-top: 6px; padding-top: 6px; }
 
-  /* 没有自带 #burger 的顶栏（如 VIP 的 .vip-nav）：cards.js 加上 .has-burger 后再收成抽屉。
+  /* 没有自带汉堡的水平 nav：cards.js 加上 .has-burger 后再收成抽屉。
+     VIP 使用 #vip-burger / data-no-auto-burger，不走这条。
      脚本未运行时导航保持原样，避免只剩一个打不开的空顶栏。 */
   .ant-header.has-burger > .in > nav:not(.menu):not(.ant-menu),
   .topbar.has-burger > .in > nav:not(.menu):not(.ant-menu) {
