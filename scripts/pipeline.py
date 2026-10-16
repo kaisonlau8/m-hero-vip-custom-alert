@@ -34,6 +34,12 @@ def run_pipeline(
 
     if sync_first:
         steps["sync"] = sync_all()
+        from directory_sync import sync_directory
+
+        try:
+            steps["directory"] = sync_directory()
+        except Exception as exc:
+            steps["directory_error"] = str(exc)
 
     xlsx_path: Path | None = None
     if import_xlsx:

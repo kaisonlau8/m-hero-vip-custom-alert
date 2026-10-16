@@ -11,6 +11,8 @@ data/sent_tasks.json
 data/run_manifest.json
 data/recipients_list.json
 config/recipients.json
+config/national_recipients.json
+data/store_directory.json
 download/*.xlsx
 !download/.gitkeep
 recordings/*
