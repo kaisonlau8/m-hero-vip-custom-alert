@@ -105,7 +105,8 @@
 
 /* 移动端导航（<=860px，与 antd-lite.css 4.6 / 4.7 同一断点）。
  * 桌面端不改顶栏。已有 #burger 的页面（reportdb）只补遮罩点击与 Esc；
- * 只有水平 nav、没有汉堡的顶栏（VIP）在窄屏插入按钮并加上 .has-burger；
+ * 只有水平 nav、没有汉堡的顶栏在窄屏插入按钮并加上 .has-burger。
+ * VIP 已有 #vip-burger（或顶栏 data-no-auto-burger）时不再插入，避免两个汉堡。
  * 黄页 .hub-user 仍用页面自己的点击切换，这里补姓名行、aria 与遮罩关闭。 */
 (function () {
   'use strict';
@@ -125,7 +126,18 @@
     setBurger(bar.querySelector('.burger'), false);
   }
 
+  function skipAutoBurger(header) {
+    return header.hasAttribute('data-no-auto-burger') || !!header.querySelector('#vip-burger');
+  }
+
   function ensurePlainNav(header) {
+    if (skipAutoBurger(header)) {
+      var injected = header.querySelector('.burger[data-mhero-burger="1"]');
+      if (injected && injected.parentNode) injected.parentNode.removeChild(injected);
+      header.classList.remove('has-burger');
+      header.classList.remove('nav-ready');
+      return;
+    }
     if (header.querySelector('.burger')) return;
     var nav = header.querySelector(':scope > .in > nav');
     if (!nav || nav.classList.contains('menu') || nav.classList.contains('ant-menu')) return;
