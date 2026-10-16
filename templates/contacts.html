@@ -9,6 +9,7 @@
 </header>
 
 {% if sync_message %}
+<div hidden data-af-toast="{{ 'success' if sync_ok else 'error' }}" data-af-toast-mode="{{ 'message' if sync_ok else 'notification' }}" data-af-toast-title="操作失败" data-af-toast-text="{{ sync_message }}"></div>
 <div class="ant-alert {{ 'ant-alert-success' if sync_ok else 'ant-alert-error' }}">
   <span class="ant-alert-icon"><svg class="ai" aria-hidden="true"><use href="{{ '#i-check-circle' if sync_ok else '#i-close-circle' }}"/></svg></span>
   <div class="ant-alert-content">{{ sync_message }}</div>
@@ -22,7 +23,7 @@
   {% if sync_state.synced_at %}
   <p class="muted">最近同步：{{ sync_state.synced_at }}，门店 {{ sync_state.store_count or 0 }} 家，区域 {{ sync_state.region_count or 0 }} 个</p>
   {% endif %}
-  <form method="post" action="/contacts/sync">
+  <form method="post" action="/contacts/sync" data-af-submit>
     <button type="submit" class="ant-btn ant-btn-primary"><svg class="ai" aria-hidden="true"><use href="#i-reload"/></svg>立即同步</button>
   </form>
   </div>
@@ -53,7 +54,7 @@
   <div class="ant-card-head"><h2 class="ant-card-head-title">全国收件人</h2></div>
   <div class="ant-card-body">
   <p class="muted">只影响本系统。不选客户级别则抄送全部级别；勾选 S级 会包含「S级」和「S级（高管）」。同一人若已是该条提醒的收件人，不会再抄送一张。</p>
-  <form method="post" action="/contacts/national/add">
+  <form method="post" action="/contacts/national/add" data-af-submit>
     <div class="ant-form-row" style="align-items:end">
       <div class="ant-form-item"><label class="ant-form-item-label" for="nn">姓名</label>
         <div class="ant-form-item-control"><input class="ant-input" id="nn" name="name" required placeholder="姓名"></div></div>
@@ -77,7 +78,7 @@
       <td>{{ item.levels | join('、') if item.levels else '全部' }}</td>
       <td>{% if item.resolved %}<span class="ant-tag ant-tag-success">已解析</span>{% else %}<span class="ant-tag ant-tag-error">未解析</span>{% endif %}</td>
       <td>
-        <form method="post" action="/contacts/national/delete" onsubmit="return confirm('确认删除全国收件人：{{ item.name }}？');">
+        <form method="post" action="/contacts/national/delete" data-af-submit onsubmit="return confirm('确认删除全国收件人：{{ item.name }}？');">
           <input type="hidden" name="name" value="{{ item.name }}">
           <input type="hidden" name="phone" value="{{ item.phone }}">
           <button type="submit" class="ant-btn ant-btn-sm ant-btn-danger"><svg class="ai" aria-hidden="true"><use href="#i-delete"/></svg>删除</button>
