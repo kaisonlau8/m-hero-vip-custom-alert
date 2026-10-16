@@ -1,281 +1,169 @@
-/* feedback.js — Ant Design 交互反馈（无构建、无第三方动画库）
- * Button loading、Spin、Message、Notification。页面脚本通过 window.AntFeedback 调用。
- * 本控制台没有上传入口，不提供 Upload 进度。 */
+/* feedback.js — Ant Design 交互反馈（Button loading / Spin 由页面标记，message 轻提示）。
+ * 无第三方动效库。页面约定：
+ * - <button data-loading-text="正在保存"> 所在表单提交后进入 loading，并弹出 message.loading
+ * - <a data-nav data-loading-text="正在打开账号设置"> 同页跳转
+ * - <a data-nav="blank" data-success-text="已在新标签页打开「…」" data-error-text="…"> 新标签
+ * - 点击被禁用控件的包裹元素 [data-blocked-text] 时弹出错误提示
+ * - #flash-ok / #flash-err 的文案在加载后用 message 再提示一次
+ * 暴露 window.MheroFeedback.toast(type, text) ，type = success | error | info | warning | loading
+ */
 (function () {
-  'use strict';
+  var ICONS = { success: "check-circle", error: "close-circle", warning: "exclamation-circle", info: "info-circle" };
 
-  var ICONS = {
-    success: 'i-check-circle',
-    error: 'i-close-circle',
-    warning: 'i-exclamation-circle',
-    info: 'i-info-circle',
-    loading: 'i-loading'
-  };
-
-  function svgIcon(id, spin) {
-    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttribute('class', 'ai' + (spin ? ' anticon-spin' : ''));
-    svg.setAttribute('aria-hidden', 'true');
-    svg.setAttribute('focusable', 'false');
-    var use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
-    use.setAttribute('href', '#' + id);
+  function loadingSvg() {
+    var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "ai anticon-spin");
+    svg.setAttribute("viewBox", "0 0 1024 1024");
+    svg.setAttribute("aria-hidden", "true");
+    var use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+    use.setAttribute("href", "#i-loading");
     svg.appendChild(use);
     return svg;
   }
 
-  function createSpin(size, withTip) {
-    var span = document.createElement('span');
-    span.className = 'ant-spin ant-spin-spinning' + (size ? ' ant-spin-' + size : '');
-    span.setAttribute('role', 'status');
-    span.setAttribute('aria-label', '加载中');
-    var dot = document.createElement('span');
-    dot.className = 'ant-spin-dot ant-spin-dot-spin';
-    for (var i = 0; i < 4; i++) {
-      var item = document.createElement('i');
-      item.className = 'ant-spin-dot-item';
-      dot.appendChild(item);
-    }
-    span.appendChild(dot);
-    if (withTip) {
-      var text = document.createElement('div');
-      text.className = 'ant-spin-text';
-      text.textContent = '加载中';
-      span.appendChild(text);
-    }
-    return span;
-  }
-
-  function mount(root) {
-    var scope = root || document;
-    if (!scope.querySelectorAll) return;
-    scope.querySelectorAll('[data-af-placeholder-spin]').forEach(function (el) {
-      if (el.getAttribute('data-af-spin-done') === '1') return;
-      if (el.querySelector('.ant-spin')) return;
-      var size = el.getAttribute('data-af-placeholder-spin') || 'sm';
-      el.insertBefore(createSpin(size), el.firstChild);
-    });
-    scope.querySelectorAll('.ant-spin-nested-loading.is-spinning').forEach(function (host) {
-      if (host.querySelector(':scope > .ant-spin')) return;
-      host.insertBefore(createSpin('', true), host.firstChild);
-    });
-  }
-
-  function setNestedSpin(el, on) {
-    if (!el) return;
-    if (on) {
-      el.classList.add('is-spinning');
-      if (!el.querySelector(':scope > .ant-spin')) el.insertBefore(createSpin('', true), el.firstChild);
-    } else {
-      el.classList.remove('is-spinning');
-    }
-  }
-
-  function setButtonLoading(btn, on, deferDisable) {
-    if (!btn) return;
-    if (on) {
-      if (btn.classList.contains('ant-btn-loading')) return;
-      btn.dataset.afPrevDisabled = btn.disabled ? '1' : '0';
-      btn.classList.add('ant-btn-loading');
-      btn.setAttribute('aria-busy', 'true');
-      var icon = document.createElement('span');
-      icon.className = 'ant-btn-loading-icon';
-      icon.appendChild(svgIcon('i-loading', true));
-      btn.insertBefore(icon, btn.firstChild);
-      if (deferDisable) {
-        setTimeout(function () {
-          if (btn.isConnected && btn.classList.contains('ant-btn-loading')) btn.disabled = true;
-        }, 0);
-      } else {
-        btn.disabled = true;
-      }
-      return;
-    }
-    if (!btn.classList.contains('ant-btn-loading')) return;
-    btn.classList.remove('ant-btn-loading');
-    btn.removeAttribute('aria-busy');
-    var existing = btn.querySelector('.ant-btn-loading-icon');
-    if (existing) existing.remove();
-    btn.disabled = btn.dataset.afPrevDisabled === '1';
-    delete btn.dataset.afPrevDisabled;
-  }
-
-  function ensureHolder(className) {
-    var el = document.querySelector('.' + className);
+  function root() {
+    var el = document.querySelector(".ant-message");
     if (!el) {
-      el = document.createElement('div');
-      el.className = className;
+      el = document.createElement("div");
+      el.className = "ant-message";
+      el.setAttribute("aria-live", "polite");
       document.body.appendChild(el);
     }
     return el;
   }
 
-  function removeLater(node, className) {
-    node.classList.add(className);
-    setTimeout(function () {
-      if (node.parentNode) node.parentNode.removeChild(node);
-    }, 200);
-  }
-
-  function messageOpen(type, text, duration) {
-    var holder = ensureHolder('ant-message');
-    var notice = document.createElement('div');
-    notice.className = 'ant-message-notice';
-    var content = document.createElement('div');
-    content.className = 'ant-message-notice-content ant-message-' + type;
-    content.setAttribute('role', type === 'error' ? 'alert' : 'status');
-    var iconWrap = document.createElement('span');
-    iconWrap.className = 'ant-message-icon';
-    iconWrap.appendChild(svgIcon(ICONS[type] || ICONS.info, type === 'loading'));
-    var span = document.createElement('span');
-    span.className = 'ant-message-text';
-    span.textContent = text == null ? '' : String(text);
-    content.appendChild(iconWrap);
-    content.appendChild(span);
+  function toast(type, text) {
+    text = (text || "").trim();
+    if (!text) return null;
+    var notice = document.createElement("div");
+    notice.className = "ant-message-notice";
+    var content = document.createElement("div");
+    content.className = "ant-message-notice-content";
+    var row = document.createElement("div");
+    row.className = "ant-message-custom-content ant-message-" + type;
+    if (type === "loading") {
+      var icon = document.createElement("span");
+      icon.className = "ant-message-icon";
+      icon.appendChild(loadingSvg());
+      row.appendChild(icon);
+    } else if (ICONS[type]) {
+      var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("class", "ai");
+      svg.setAttribute("aria-hidden", "true");
+      var use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+      use.setAttribute("href", "#i-" + ICONS[type]);
+      svg.appendChild(use);
+      row.appendChild(svg);
+    }
+    var label = document.createElement("span");
+    label.className = "ant-message-text";
+    label.textContent = text;
+    row.appendChild(label);
+    content.appendChild(row);
     notice.appendChild(content);
-    holder.appendChild(notice);
-    var ms = duration == null ? (type === 'loading' ? 0 : 3000) : duration;
-    var closed = false;
+    root().appendChild(notice);
     function close() {
-      if (closed) return;
-      closed = true;
-      removeLater(notice, 'ant-message-notice-leave');
+      if (!notice.isConnected || notice.classList.contains("ant-message-notice-leave")) return;
+      notice.classList.add("ant-message-notice-leave");
+      setTimeout(function () { notice.remove(); }, 200);
     }
-    if (ms > 0) setTimeout(close, ms);
-    return close;
+    if (type !== "loading") setTimeout(close, type === "error" ? 4000 : 3000);
+    return { close: close };
   }
 
-  function notificationOpen(opts) {
-    opts = opts || {};
-    var type = opts.type || 'info';
-    var holder = ensureHolder('ant-notification');
-    var notice = document.createElement('div');
-    notice.className = 'ant-notification-notice ant-notification-notice-' + type;
-    notice.setAttribute('role', type === 'error' ? 'alert' : 'status');
-
-    var icon = document.createElement('span');
-    icon.className = 'ant-notification-notice-icon';
-    icon.appendChild(svgIcon(ICONS[type] || ICONS.info, false));
-
-    var title = document.createElement('div');
-    title.className = 'ant-notification-notice-message';
-    title.textContent = opts.title == null ? '' : String(opts.title);
-
-    var desc = document.createElement('div');
-    desc.className = 'ant-notification-notice-description';
-    desc.textContent = opts.description == null ? '' : String(opts.description);
-
-    var closeBtn = document.createElement('button');
-    closeBtn.type = 'button';
-    closeBtn.className = 'ant-notification-notice-close';
-    closeBtn.setAttribute('aria-label', '关闭');
-    closeBtn.appendChild(svgIcon('i-close', false));
-
-    notice.appendChild(icon);
-    notice.appendChild(title);
-    if (opts.description) notice.appendChild(desc);
-    notice.appendChild(closeBtn);
-    holder.appendChild(notice);
-
-    var closed = false;
-    function close() {
-      if (closed) return;
-      closed = true;
-      removeLater(notice, 'ant-notification-notice-leave');
-    }
-    closeBtn.addEventListener('click', close);
-    var ms = opts.duration == null ? 4500 : opts.duration;
-    if (ms > 0) setTimeout(close, ms);
-    return close;
-  }
-
-  function flash(type, text) {
-    try {
-      sessionStorage.setItem('ant-feedback-flash', JSON.stringify({
-        type: type || 'success',
-        text: text == null ? '' : String(text)
-      }));
-    } catch (err) { /* 隐私模式可忽略 */ }
-  }
-
-  function consumePending() {
-    try {
-      var raw = sessionStorage.getItem('ant-feedback-flash');
-      if (raw) {
-        sessionStorage.removeItem('ant-feedback-flash');
-        var data = JSON.parse(raw);
-        if (data && data.text) messageOpen(data.type || 'success', data.text);
-      }
-    } catch (err) { /* 忽略损坏的 flash */ }
-    document.querySelectorAll('[data-af-toast]').forEach(function (el) {
-      var type = el.getAttribute('data-af-toast') || 'info';
-      var text = el.getAttribute('data-af-toast-text') || '';
-      if (!text) return;
-      var mode = el.getAttribute('data-af-toast-mode') || 'message';
-      if (mode === 'notification') {
-        notificationOpen({
-          type: type,
-          title: el.getAttribute('data-af-toast-title') || (type === 'error' ? '操作失败' : '提示'),
-          description: text
-        });
-      } else {
-        messageOpen(type, text);
-      }
-      el.removeAttribute('data-af-toast');
+  function setLoading(el) {
+    if (!el || el.getAttribute("data-loading") === "1") return;
+    el.setAttribute("data-loading", "1");
+    el.setAttribute("aria-busy", "true");
+    el.classList.add("ant-btn-loading");
+    Array.prototype.forEach.call(el.children, function (ch) {
+      if (ch.classList && ch.classList.contains("ai")) ch.setAttribute("data-fb-hidden", "1");
     });
+    var icon = document.createElement("span");
+    icon.className = "ant-btn-loading-icon";
+    icon.setAttribute("aria-hidden", "true");
+    icon.appendChild(loadingSvg());
+    el.insertBefore(icon, el.firstChild);
+    setTimeout(function () {
+      if (el.getAttribute("data-loading") !== "1") return;
+      el.classList.add("is-locked");
+      if (el.tagName === "BUTTON" && !el.disabled) {
+        el.disabled = true;
+        el.setAttribute("data-fb-dis", "1");
+      }
+    }, 0);
   }
 
-  document.addEventListener('submit', function (e) {
+  function clearLoading(el) {
+    if (!el) return;
+    el.classList.remove("ant-btn-loading", "is-locked");
+    el.removeAttribute("data-loading");
+    el.removeAttribute("aria-busy");
+    var icon = el.querySelector(":scope > .ant-btn-loading-icon");
+    if (icon) icon.remove();
+    Array.prototype.forEach.call(el.querySelectorAll("[data-fb-hidden]"), function (n) {
+      n.removeAttribute("data-fb-hidden");
+    });
+    if (el.getAttribute("data-fb-dis") === "1") {
+      el.disabled = false;
+      el.removeAttribute("data-fb-dis");
+    }
+  }
+
+  function blocked(el) {
+    return el.hasAttribute("disabled") || el.getAttribute("aria-disabled") === "true";
+  }
+
+  document.addEventListener("submit", function (e) {
     var form = e.target;
-    if (!form || !form.hasAttribute || !form.hasAttribute('data-af-submit')) return;
-    if (e.defaultPrevented) return;
-    if (form.dataset.afSubmitted === '1') {
+    if (!form || form.nodeName !== "FORM" || form.hasAttribute("data-feedback-off")) return;
+    var btn = e.submitter && e.submitter.tagName === "BUTTON" ? e.submitter : form.querySelector('button[type="submit"], button:not([type])');
+    if (!btn) return;
+    if (btn.getAttribute("data-loading") === "1") {
       e.preventDefault();
       return;
     }
-    form.dataset.afSubmitted = '1';
-    var btn = form.querySelector('button[type="submit"], button:not([type])');
-    /* 先换上 loading 外观；disabled 延后一拍，避免部分浏览器取消这次提交 */
-    setButtonLoading(btn, true, true);
+    setLoading(btn);
+    toast("loading", btn.getAttribute("data-loading-text") || "正在提交");
+  }, true);
+
+  document.addEventListener("click", function (e) {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    var wrap = e.target.closest && e.target.closest("[data-blocked-text]");
+    var nav = e.target.closest && e.target.closest("[data-nav]");
+    if (wrap && (!nav || !wrap.contains(nav) || (nav && blocked(nav) && !nav.contains(e.target)))) {
+      var ctrl = wrap.querySelector("[data-nav]");
+      if (ctrl && blocked(ctrl)) {
+        e.preventDefault();
+        toast("error", wrap.getAttribute("data-blocked-text") || ctrl.getAttribute("data-error-text") || "暂时无法打开");
+        return;
+      }
+    }
+    if (!nav) return;
+    if (nav.getAttribute("data-loading") === "1") {
+      e.preventDefault();
+      return;
+    }
+    if (blocked(nav)) {
+      e.preventDefault();
+      toast("error", nav.getAttribute("data-error-text") || "暂时无法打开");
+      return;
+    }
+    setLoading(nav);
+    if (nav.getAttribute("data-nav") === "blank") {
+      var ok = nav.getAttribute("data-success-text");
+      if (ok) toast("success", ok);
+      setTimeout(function () { clearLoading(nav); }, 700);
+    } else {
+      var pending = nav.getAttribute("data-loading-text");
+      if (pending) toast("loading", pending);
+    }
   });
 
-  function boot() {
-    mount(document);
-    consumePending();
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
-  else boot();
+  var ok = document.querySelector("#flash-ok .ant-alert-content");
+  var err = document.querySelector("#flash-err .ant-alert-content");
+  if (ok) toast("success", ok.textContent);
+  if (err) toast("error", err.textContent);
 
-  function typedMessage(type) {
-    return function (text, duration) { return messageOpen(type, text, duration); };
-  }
-  function typedNotice(type) {
-    return function (opts) {
-      opts = opts || {};
-      opts.type = type;
-      return notificationOpen(opts);
-    };
-  }
-
-  window.AntFeedback = {
-    mount: mount,
-    createSpin: createSpin,
-    setNestedSpin: setNestedSpin,
-    setButtonLoading: setButtonLoading,
-    flash: flash,
-    message: {
-      open: messageOpen,
-      success: typedMessage('success'),
-      error: typedMessage('error'),
-      info: typedMessage('info'),
-      warning: typedMessage('warning'),
-      loading: function (text, duration) { return messageOpen('loading', text, duration == null ? 0 : duration); }
-    },
-    notification: {
-      open: notificationOpen,
-      success: typedNotice('success'),
-      error: typedNotice('error'),
-      info: typedNotice('info'),
-      warning: typedNotice('warning')
-    }
-  };
+  window.MheroFeedback = { toast: toast, loading: setLoading, clear: clearLoading };
 })();
