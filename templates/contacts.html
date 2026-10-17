@@ -32,7 +32,7 @@
 <div class="ant-card">
   <div class="ant-card-head"><h2 class="ant-card-head-title">门店列表 <span class="ant-card-head-sub">{{ store_list | length }} 家</span></h2></div>
   <div class="ant-card-body">
-  <div class="tw ant-table-wrap"><table><thead><tr><th>店代码</th><th data-card-title>店名称</th><th>区域</th><th>督导</th><th>售后负责人</th></tr></thead>
+  <div class="tw ant-table-wrap"><table data-ds-primary><thead><tr><th>店代码</th><th data-card-title>店名称</th><th>区域</th><th>督导</th><th>售后负责人</th></tr></thead>
     <tbody>
     {% for s in store_list %}
     <tr>
