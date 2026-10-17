@@ -55,7 +55,7 @@
     <button class="ant-btn" id="btn-sched-start" type="button" onclick="schedStart(this)"><svg class="ai" aria-hidden="true"><use href="#i-clock-circle"/></svg>启动定时等候</button>
     <button class="ant-btn" id="btn-sched-stop" type="button" onclick="schedStop(this)"><svg class="ai" aria-hidden="true"><use href="#i-stop"/></svg>停止定时</button>
   </div>
-  <p class="muted ant-mt-2" id="vip-detail" data-af-placeholder-spin="sm">加载中…</p>
+  <p class="muted ant-mt-2" id="vip-detail" data-af-placeholder-spin="sm" data-ds-skeleton>加载中…</p>
   </div>
 </div>
 
@@ -110,7 +110,7 @@
   <div id="session-monitor-spin-host" class="ant-spin-nested-loading is-spinning">
     <div class="ant-spin-container">
       <div class="tw ant-table-wrap ds-collapse" data-ds-title="登录事件"><table><thead><tr><th data-card-title>时间</th><th>状态</th><th>来源</th><th>页面</th><th>依据</th></tr></thead>
-        <tbody id="session-monitor-events"><tr><td colspan="5" class="muted">加载中…</td></tr></tbody></table></div>
+        <tbody id="session-monitor-events" data-ds-skeleton><tr><td colspan="5" class="muted">加载中…</td></tr></tbody></table></div>
     </div>
   </div>
   </div>
