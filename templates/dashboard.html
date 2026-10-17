@@ -64,7 +64,7 @@
   <div class="ant-card-body">
   <div id="browser-detail" class="ant-mb-2">
     {% if browser %}
-    <div class="tw ant-table-wrap"><table style="width:auto"><tbody>
+    <div class="tw ant-table-wrap ds-collapse" data-ds-title="浏览器属性"><table style="width:auto"><thead><tr><th>属性</th><th>内容</th></tr></thead><tbody>
       <tr><td style="width:110px">浏览器</td><td>{{ Path(browser.browserExecutable).stem if browser.browserExecutable else '未知' }}</td></tr>
       <tr><td>PID</td><td>{{ browser.pid }}</td></tr>
       <tr><td>CDP端口</td><td>{{ browser.port }}</td></tr>
@@ -109,7 +109,7 @@
   </p>
   <div id="session-monitor-spin-host" class="ant-spin-nested-loading is-spinning">
     <div class="ant-spin-container">
-      <div class="tw ant-table-wrap"><table><thead><tr><th data-card-title>时间</th><th>状态</th><th>来源</th><th>页面</th><th>依据</th></tr></thead>
+      <div class="tw ant-table-wrap ds-collapse" data-ds-title="登录事件"><table><thead><tr><th data-card-title>时间</th><th>状态</th><th>来源</th><th>页面</th><th>依据</th></tr></thead>
         <tbody id="session-monitor-events"><tr><td colspan="5" class="muted">加载中…</td></tr></tbody></table></div>
     </div>
   </div>
@@ -130,7 +130,7 @@
   </p>
   {% if recordings %}
   <h3 style="font-size:var(--ant-font-size-base);margin:var(--ant-space-3) 0 var(--ant-space-2)">最近录制</h3>
-  <div class="tw ant-table-wrap"><table><thead><tr><th data-card-title>会话</th><th>时间</th><th>事件数</th><th>摘要</th></tr></thead>
+  <div class="tw ant-table-wrap ds-collapse" data-ds-title="最近录制"><table><thead><tr><th data-card-title>会话</th><th>时间</th><th>事件数</th><th>摘要</th></tr></thead>
     <tbody id="recordings-tbody">
     {% for r in recordings %}
     <tr>
@@ -145,7 +145,7 @@
   </div>
 </div>
 
-<div class="ant-card">
+<div class="ant-card ds-collapse" data-ds-title="会话复用" data-ds-count="1">
   <div class="ant-card-head"><h2 class="ant-card-head-title">会话复用</h2></div>
   <div class="ant-card-body">
   <p style="font-size:var(--ant-font-size-base)">
