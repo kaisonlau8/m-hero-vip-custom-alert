@@ -72,6 +72,48 @@ def _parse_user(value: Any) -> tuple[str, str]:
     return "", ""
 
 
+def _normalize_field_name(name: Any) -> str:
+    """去掉字段名中的空白（含全角空格），兼容「负责人 1」和「负责人1」。"""
+    return "".join(str(name).split())
+
+
+def _parse_service_managers(fields: dict) -> list[dict]:
+    """解析 1..4 号售后业务负责人，旧的未编号字段视为 1 号。
+
+    字段名忽略空白，同名别名取第一个非空值。1 号槽位：编号字段（人或手机号任一非空）整体优先，
+    全空时才整体使用旧字段，不把两个人的信息拼在一起。按 open_id（否则姓名）去重，
+    重复时把缺的手机号/open_id 补到先出现的那条上。
+    """
+    normalized: dict[str, Any] = {}
+    for key, value in fields.items():
+        nk = _normalize_field_name(key)
+        if nk not in normalized or (not normalized[nk] and value):
+            normalized[nk] = value
+    name_prefix = "门店售后业务负责人"
+    phone_prefix = "售后业务负责人手机号"
+    managers: list[dict] = []
+    index: dict[str, dict] = {}
+    for slot in range(1, 5):
+        name, open_id = _parse_user(normalized.get(f"{name_prefix}{slot}"))
+        phone = _normalize_phone(normalized.get(f"{phone_prefix}{slot}"))
+        if slot == 1 and not name and not open_id and not phone:
+            name, open_id = _parse_user(normalized.get(name_prefix))
+            phone = _normalize_phone(normalized.get(phone_prefix))
+        if not name and not open_id and not phone:
+            continue
+        identity = open_id or name
+        if identity and identity in index:
+            kept = index[identity]
+            kept["phone"] = kept["phone"] or phone
+            kept["open_id"] = kept["open_id"] or open_id
+            continue
+        person = {"name": name, "phone": phone, "open_id": open_id}
+        if identity:
+            index[identity] = person
+        managers.append(person)
+    return managers
+
+
 def _fetch_records() -> list[dict]:
     app_token, table_id, view_id = _directory_config()
     records: list[dict] = []
@@ -111,10 +153,10 @@ def records_to_stores(records: list[dict]) -> tuple[list[dict], list[str]]:
         if not code:
             continue
         sup_name, sup_open_id = _parse_user(fields.get("督导"))
-        mgr_name, mgr_open_id = _parse_user(fields.get("门店售后业务负责人"))
-        mgr_phone = _normalize_phone(fields.get("售后业务负责人手机号"))
+        managers = _parse_service_managers(fields)
+        mgr = managers[0] if managers else {"name": "", "phone": "", "open_id": ""}
         name = _field_text(fields.get("店名称") or fields.get("门店名称"))
-        if not mgr_name and not mgr_open_id and not mgr_phone:
+        if not managers:
             missing.append(f"{code} {name}".strip())
         stores.append(
             {
@@ -129,11 +171,8 @@ def records_to_stores(records: list[dict]) -> tuple[list[dict], list[str]]:
                     "phone": _normalize_phone(fields.get("督导手机号")),
                     "open_id": sup_open_id,
                 },
-                "service_manager": {
-                    "name": mgr_name,
-                    "phone": mgr_phone,
-                    "open_id": mgr_open_id,
-                },
+                "service_manager": mgr,
+                "service_managers": managers,
             }
         )
     return stores, missing
